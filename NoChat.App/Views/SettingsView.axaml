@@ -41,6 +41,8 @@
                     <ComboBoxItem Content="最小化到托盘"/>
                     <ComboBoxItem Content="直接退出程序"/>
                 </ComboBox>
+                <TextBlock Text="若已选择「最小化到托盘」，想真正退出时请点击下方按钮。" FontSize="12" Opacity="0.8" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                <Button x:Name="BtnExitApp" Content="退出 NoChat" Click="OnExitAppClick" HorizontalAlignment="Left" Margin="0,4,0,0"/>
             </StackPanel>
 
             <StackPanel x:Name="NetworkSection" Spacing="12">

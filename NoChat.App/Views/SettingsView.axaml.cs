@@ -100,6 +100,13 @@ public partial class SettingsView : UserControl
         AppSettings.AccentColor = name;
     }
 
+    private void OnExitAppClick(object? sender, RoutedEventArgs e)
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+            && desktop.MainWindow is MainWindow main)
+            main.RequestExit();
+    }
+
     private void OnCloseBehaviorChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (CloseBehaviorCombo?.SelectedIndex is not int i) return;

@@ -37,6 +37,7 @@ public partial class MainWindow : Window
         catch { }
         Loaded += OnLoaded;
         Closing += OnClosing;
+        Activated += (_, _) => _vm?.SetWindowVisible(true);
     }
 
     public void RequestExit()
@@ -128,7 +129,15 @@ public partial class MainWindow : Window
         else if (choice == CloseChoice.MinimizeToTray)
         {
             _vm?.SetWindowVisible(false);
-            Hide();
+            if (OperatingSystem.IsWindows())
+            {
+                Hide();
+            }
+            else
+            {
+                // Linux/Ubuntu 等无系统托盘或托盘不可见时：最小化到任务栏，用户可从任务栏/ dock 点击恢复
+                WindowState = WindowState.Minimized;
+            }
         }
     }
 
