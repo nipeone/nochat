@@ -45,7 +45,7 @@ public sealed class DiscoveryService : IDisposable
     public event Action<string>? UserOffline;
 
     private readonly Dictionary<string, (UserInfo user, DateTime lastSeen)> _knownUsers = new();
-    private readonly TimeSpan _offlineThreshold = TimeSpan.FromSeconds(12);
+    private readonly TimeSpan _offlineThreshold = TimeSpan.FromSeconds(3);
     private readonly object _sync = new();
 
     public DiscoveryService(string displayName, int chatPort, int filePort)
@@ -232,7 +232,7 @@ public sealed class DiscoveryService : IDisposable
     {
         while (!ct.IsCancellationRequested)
         {
-            await Task.Delay(5000, ct);
+            await Task.Delay(1000, ct);
             List<string>? toRemove = null;
             lock (_sync)
             {

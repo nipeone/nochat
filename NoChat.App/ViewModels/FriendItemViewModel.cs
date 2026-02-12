@@ -22,6 +22,8 @@ public sealed class FriendItemViewModel : INotifyPropertyChanged
         {
             if (e.PropertyName == nameof(UserInfo.DisplayName) || e.PropertyName == nameof(UserInfo.Id))
                 Raise(nameof(DisplayNameForList));
+            if (e.PropertyName == nameof(UserInfo.IsOnline))
+                Raise(nameof(IsOnline));
         };
     }
 
