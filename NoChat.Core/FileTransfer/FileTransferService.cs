@@ -12,15 +12,18 @@ public sealed class FileTransferService : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _acceptTask;
     private readonly int _listenPort;
+    private readonly Func<string, string, string, long, Task<bool>>? _onFileRequest;
     private readonly Func<string, string, string, long, Stream, Task>? _onReceiveFile;
-    private readonly Func<string, string, string, bool, Stream, Task>? _onReceiveFolder;
+    private readonly Func<string, string, string, string, bool, Stream, Task>? _onReceiveFolder;
 
     public FileTransferService(
         int listenPort,
+        Func<string, string, string, long, Task<bool>>? onFileRequest = null,
         Func<string, string, string, long, Stream, Task>? onReceiveFile = null,
-        Func<string, string, string, bool, Stream, Task>? onReceiveFolder = null)
+        Func<string, string, string, string, bool, Stream, Task>? onReceiveFolder = null)
     {
         _listenPort = listenPort;
+        _onFileRequest = onFileRequest;
         _onReceiveFile = onReceiveFile;
         _onReceiveFolder = onReceiveFolder;
         _listener = new TcpListener(IPAddress.Any, listenPort);
@@ -65,6 +68,7 @@ public sealed class FileTransferService : IDisposable
 
             if (isFolder)
             {
+                var folderName = name;
                 var count = reader.ReadInt32();
                 for (var i = 0; i < count; i++)
                 {
@@ -73,26 +77,27 @@ public sealed class FileTransferService : IDisposable
                     await ReadStreamToAction(stream, fileSize, async (s) =>
                     {
                         if (_onReceiveFolder != null)
-                            await _onReceiveFolder(senderId, senderName, fileName, true, s);
+                            await _onReceiveFolder(senderId, senderName, fileName, folderName, true, s);
                     });
                 }
                 if (_onReceiveFolder != null)
-                    await _onReceiveFolder(senderId, senderName, name, true, Stream.Null);
+                    await _onReceiveFolder(senderId, senderName, folderName, folderName, true, Stream.Null);
             }
             else
             {
                 var fileSize = reader.ReadInt64();
-                if (_onReceiveFile != null)
+                var accept = _onFileRequest != null && await _onFileRequest(senderId, senderName, name, fileSize);
+                using (var writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                    writer.Write(accept);
+                if (accept && _onReceiveFile != null)
                 {
                     await ReadStreamToAction(stream, fileSize, async (s) =>
                     {
                         await _onReceiveFile(senderId, senderName, name, fileSize, s);
                     });
                 }
-                else
-                {
+                else if (!accept)
                     await SkipStreamAsync(stream, fileSize);
-                }
             }
         }
         finally
@@ -139,16 +144,23 @@ public sealed class FileTransferService : IDisposable
         var fileName = Path.GetFileName(filePath);
         var fileSize = new FileInfo(filePath).Length;
         using var client = new TcpClient();
-        await client.ConnectAsync(toUser.IpAddress, toUser.FilePort, ct);
+        await client.ConnectAsync(toUser.IpAddress, toUser.FilePort, ct).ConfigureAwait(false);
         using var stream = client.GetStream();
-        using var writer = new BinaryWriter(stream, Encoding.UTF8, true);
-        writer.Write(senderId);
-        writer.Write(senderName);
-        writer.Write(false); // isFolder
-        writer.Write(fileName);
-        writer.Write(fileSize);
+        using (var writer = new BinaryWriter(stream, Encoding.UTF8, true))
+        {
+            writer.Write(senderId);
+            writer.Write(senderName);
+            writer.Write(false); // isFolder
+            writer.Write(fileName);
+            writer.Write(fileSize);
+        }
+        using (var reader = new BinaryReader(stream, Encoding.UTF8, true))
+        {
+            var accept = reader.ReadBoolean();
+            if (!accept) return;
+        }
         await using (var fs = File.OpenRead(filePath))
-            await fs.CopyToAsync(stream, ct);
+            await fs.CopyToAsync(stream, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -159,7 +171,7 @@ public sealed class FileTransferService : IDisposable
         var folderName = Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories).ToList();
         using var client = new TcpClient();
-        await client.ConnectAsync(toUser.IpAddress, toUser.FilePort, ct);
+        await client.ConnectAsync(toUser.IpAddress, toUser.FilePort, ct).ConfigureAwait(false);
         using var stream = client.GetStream();
         using var writer = new BinaryWriter(stream, Encoding.UTF8, true);
         writer.Write(senderId);
@@ -175,7 +187,7 @@ public sealed class FileTransferService : IDisposable
             var fileSize = new FileInfo(fullPath).Length;
             writer.Write(fileSize);
             await using (var fs = File.OpenRead(fullPath))
-                await fs.CopyToAsync(stream, ct);
+                await fs.CopyToAsync(stream, ct).ConfigureAwait(false);
         }
     }
 

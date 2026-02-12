@@ -44,7 +44,9 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
 
     public event Action<string>? OnError;
     public event Action<string, string, string, long, Stream>? OnReceiveFileRequest;
-    public event Action<string, string, string, bool, Stream>? OnReceiveFolderRequest;
+    public event Action<string, string, string, string, bool, Stream>? OnReceiveFolderRequest;
+    private Func<string, string, string, long, Task<bool>>? _fileRequestHandler;
+    public void SetFileRequestHandler(Func<string, string, string, long, Task<bool>> handler) => _fileRequestHandler = handler;
 
     public MainViewModel()
     {
@@ -58,7 +60,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
             _discovery.LocalUser.Id,
             _discovery.LocalUser.DisplayName,
             chatPort);
-        _fileTransfer = new FileTransferService(filePort, OnFileReceived, OnFolderReceived);
+        _fileTransfer = new FileTransferService(filePort, OnFileRequest, OnFileReceived, OnFolderReceived);
 
         _discovery.UserDiscovered += OnUserDiscovered;
         _discovery.UserOffline += OnUserOffline;
@@ -159,15 +161,25 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
                 var m = list.FirstOrDefault(x => x.Id == messageId);
                 if (m != null) { m.IsRecalled = true; break; }
             }
-            var toRemove = CurrentMessages.FirstOrDefault(m => m.Message.Id == messageId);
-            if (toRemove != null)
+            var idx = -1;
+            for (var i = 0; i < CurrentMessages.Count; i++)
             {
-                toRemove.Message.IsRecalled = true;
-                CurrentMessages.Remove(toRemove);
-                CurrentMessages.Add(toRemove);
+                if (CurrentMessages[i].Message.Id == messageId) { idx = i; break; }
+            }
+            if (idx >= 0)
+            {
+                var item = CurrentMessages[idx];
+                item.Message.IsRecalled = true;
+                CurrentMessages.RemoveAt(idx);
+                CurrentMessages.Insert(idx, new MessageDisplayItem(item.Message, item.IsFromMe));
             }
         });
         return Task.CompletedTask;
+    }
+
+    private async Task<bool> OnFileRequest(string senderId, string senderName, string fileName, long size)
+    {
+        return await (_fileRequestHandler?.Invoke(senderId, senderName, fileName, size) ?? Task.FromResult(false));
     }
 
     private Task OnFileReceived(string senderId, string senderName, string fileName, long size, Stream stream)
@@ -176,11 +188,11 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
-    private Task OnFolderReceived(string senderId, string senderName, string path, bool isFolder, Stream stream)
+    private Task OnFolderReceived(string senderId, string senderName, string path, string folderName, bool isFolder, Stream stream)
     {
         if (stream == Stream.Null)
             return Task.CompletedTask;
-        OnReceiveFolderRequest?.Invoke(senderId, senderName, path, isFolder, stream);
+        OnReceiveFolderRequest?.Invoke(senderId, senderName, path, folderName, isFolder, stream);
         return Task.CompletedTask;
     }
 

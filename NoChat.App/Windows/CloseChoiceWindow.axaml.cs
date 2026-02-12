@@ -23,7 +23,10 @@ public partial class CloseChoiceWindow : Window
         _choice = RadioExit?.IsChecked == true ? CloseChoice.Exit : CloseChoice.MinimizeToTray;
         _remember = CheckRemember?.IsChecked == true;
         if (_remember && _choice != CloseChoice.None)
+        {
             AppSettings.SavedCloseChoice = _choice;
+            AppSettings.CloseBehavior = _choice == CloseChoice.Exit ? CloseBehavior.ExitProgram : CloseBehavior.MinimizeToTray;
+        }
         Close();
     }
 

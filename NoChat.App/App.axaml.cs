@@ -32,7 +32,8 @@ public partial class App : Application
 
         Dispatcher.UIThread.UnhandledException += (_, e) =>
         {
-            AppLogger.Error("UI 线程未处理异常（可能导致程序退出）", e.Exception);
+            AppLogger.Error("UI 线程未处理异常", e.Exception);
+            e.Handled = true; // 避免未捕获异常导致进程直接退出
         };
 
         var data = AppSettings.Load();

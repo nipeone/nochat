@@ -1,15 +1,16 @@
 using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
-using Avalonia.Media;
 
 namespace NoChat.App.Converters;
 
-public class BoolToBrushConverter : IValueConverter
+public class DateTimeToLocalStringConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        return value is true ? new SolidColorBrush(Color.Parse("#07C160")) : new SolidColorBrush(Color.Parse("#E4E6EB"));
+        if (value is DateTime dt)
+            return dt.Kind == DateTimeKind.Utc ? dt.ToLocalTime().ToString("HH:mm") : dt.ToString("HH:mm");
+        return null;
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

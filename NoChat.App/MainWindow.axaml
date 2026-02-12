@@ -8,14 +8,15 @@
         Width="1000" Height="660"
         MinWidth="800" MinHeight="500"
         ExtendClientAreaToDecorationsHint="False">
+    <!-- Avalonia 11.1+：样式 Setter 的 Value 若为整数，在控件分离时可能触发 Int32→Double 的 InvalidCastException（如双击导致视觉树更新），故此处使用小数形式强制为 double -->
     <Window.Styles>
         <Style Selector="Button">
-            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="CornerRadius" Value="8.0"/>
             <Setter Property="Padding" Value="16,10"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="13.0"/>
         </Style>
         <Style Selector="TextBox">
-            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="CornerRadius" Value="8.0"/>
             <Setter Property="Padding" Value="12,10"/>
         </Style>
         <Style Selector="ListBox">
@@ -33,8 +34,8 @@
         <!-- 左侧导航 -->
         <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Margin="0,16,0,0">
-                <StackPanel HorizontalAlignment="Center" Spacing="4" Margin="0,0,0,24">
-                    <Border Width="40" Height="40" CornerRadius="20" Background="{DynamicResource AccentBrush}" HorizontalAlignment="Center">
+                <StackPanel HorizontalAlignment="Center" Spacing="4.0" Margin="0,0,0,24">
+                    <Border Width="40" Height="40" CornerRadius="20.0" Background="{DynamicResource AccentBrush}" HorizontalAlignment="Center">
                         <TextBlock x:Name="UserInitial" Text="N" FontSize="18" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <Ellipse Width="10" Height="10" Fill="#50C878" HorizontalAlignment="Center"/>
@@ -62,8 +63,8 @@
                                 <Border Width="40" Height="40" CornerRadius="20" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0">
                                     <TextBlock Text="{Binding DisplayName, Converter={StaticResource FirstCharConverter}}" FontSize="14" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2.0">
+                                    <StackPanel Orientation="Horizontal" Spacing="6.0">
                                         <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="Medium"/>
                                         <Ellipse Width="8" Height="8" Fill="#50C878" VerticalAlignment="Center" IsVisible="{Binding IsOnline}"/>
                                         <TextBlock Text="在线" FontSize="11" Foreground="#50C878" VerticalAlignment="Center" IsVisible="{Binding IsOnline}"/>
@@ -83,7 +84,7 @@
             <Grid x:Name="ChatPanel" RowDefinitions="Auto,*,Auto" IsVisible="True">
                 <Border Grid.Row="0" Background="{DynamicResource HeaderBrush}" Padding="16,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
                     <Grid ColumnDefinitions="Auto,*">
-                        <Border Width="36" Height="36" CornerRadius="18" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0">
+                        <Border Width="36" Height="36" CornerRadius="18.0" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0">
                             <TextBlock x:Name="ChatPartnerInitial" Text="?" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -97,9 +98,10 @@
                     <ItemsControl x:Name="MessageList" ItemsSource="{Binding CurrentMessages}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vm:MessageDisplayItem">
-                                <Border Margin="0,6" Padding="14,10" CornerRadius="12" MaxWidth="420"
+                                <Border Margin="0,6" Padding="14,10" CornerRadius="12.0" MaxWidth="420"
                                         HorizontalAlignment="{Binding IsFromMe, Converter={StaticResource BoolToAlignmentConverter}}"
-                                        Background="{Binding IsFromMe, Converter={StaticResource BoolToBrushConverter}}">
+                                        Background="{Binding IsFromMe, Converter={StaticResource BoolToBrushConverter}}"
+                                        BorderThickness="0">
                                     <Border.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="撤回" Click="OnRecallMessageClick" IsVisible="{Binding CanRecall}"/>
@@ -115,7 +117,7 @@
                                                    IsVisible="{Binding Message.IsRecalled, Converter={StaticResource InverseBoolConverter}}"/>
                                         <TextBlock Text="已撤回" FontSize="13" FontStyle="Italic" Opacity="0.7"
                                                    IsVisible="{Binding Message.IsRecalled}"/>
-                                        <TextBlock Text="{Binding Message.SentAt, StringFormat='{}{0:HH:mm}'}" FontSize="11" Opacity="0.65" HorizontalAlignment="Right"/>
+                                        <TextBlock Text="{Binding Message.SentAt, Converter={StaticResource DateTimeToLocalStringConverter}}" FontSize="11" Opacity="0.65" HorizontalAlignment="Right"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>

@@ -96,21 +96,20 @@ public partial class MainWindow : Window
         {
             if (ChatTitle != null) ChatTitle.Text = $"错误: {msg}";
         });
-        _vm.OnReceiveFileRequest += async (senderId, senderName, fileName, size, stream) =>
+        _vm.SetFileRequestHandler(async (senderId, senderName, fileName, size) =>
         {
-            var confirmTcs = new TaskCompletionSource<bool?>();
-            Dispatcher.UIThread.Post(async () =>
+            var tcs = new TaskCompletionSource<bool?>();
+            await Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 var w = new Windows.ConfirmReceiveWindow();
                 w.SetMessage(senderName, fileName, size, false);
                 await w.ShowDialog(this);
-                confirmTcs.TrySetResult(w.Result);
+                tcs.TrySetResult(w.Result);
             });
-            if (await confirmTcs.Task != true)
-            {
-                if (stream != null) await stream.CopyToAsync(Stream.Null);
-                return;
-            }
+            return await tcs.Task == true;
+        });
+        _vm.OnReceiveFileRequest += async (senderId, senderName, fileName, size, stream) =>
+        {
             string? savePath = null;
             await Dispatcher.UIThread.InvokeAsync(async () => { savePath = await PromptSaveFileAsync(fileName); });
             if (savePath != null && stream != null)
@@ -120,11 +119,11 @@ public partial class MainWindow : Window
                 _vm?.AddReceivedFileMessage(senderId, senderName, fileName);
             }
         };
-        _vm.OnReceiveFolderRequest += async (senderId, senderName, path, isFolder, stream) =>
+        _vm.OnReceiveFolderRequest += async (senderId, senderName, path, folderName, isFolder, stream) =>
         {
             if (stream == Stream.Null)
             {
-                _vm?.AddReceivedFolderMessage(senderId, senderName, "");
+                _vm?.AddReceivedFolderMessage(senderId, senderName, folderName);
                 _currentReceiveFolder = null;
                 _folderReceiveTcs = null;
                 _folderRejected = false;
@@ -141,7 +140,7 @@ public partial class MainWindow : Window
                 Dispatcher.UIThread.Post(async () =>
                 {
                     var w = new Windows.ConfirmReceiveWindow();
-                    w.SetMessage(senderName, "文件夹", 0, true);
+                    w.SetMessage(senderName, folderName, 0, true);
                     await w.ShowDialog(this);
                     confirmTcs.TrySetResult(w.Result);
                 });
@@ -162,14 +161,18 @@ public partial class MainWindow : Window
             var dir2 = await _folderReceiveTcs!.Task;
             if (dir2 != null)
             {
-                var fullPath = Path.Combine(dir2, path);
+                var baseDir = Path.Combine(dir2, folderName);
+                var fullPath = Path.Combine(baseDir, path);
                 var dirPath = Path.GetDirectoryName(fullPath);
                 if (!string.IsNullOrEmpty(dirPath)) Directory.CreateDirectory(dirPath);
                 await using var fs = File.Create(fullPath);
                 await stream.CopyToAsync(fs);
             }
             else
+            {
+                _folderRejected = true;
                 await stream.CopyToAsync(Stream.Null);
+            }
         };
     }
 
@@ -197,6 +200,8 @@ public partial class MainWindow : Window
             r["HeaderBrush"] = new SolidColorBrush(Color.Parse("#161B26"));
             r["BorderBrush"] = new SolidColorBrush(Color.Parse("#252B38"));
             r["ChatAreaBrush"] = new SolidColorBrush(Color.Parse("#13161E"));
+            r["MessageReceivedBrush"] = new SolidColorBrush(Color.Parse("#2A2E38"));
+            r["MessageSentBrush"] = new SolidColorBrush(Color.Parse("#07C160"));
         }
         else
         {
@@ -204,7 +209,9 @@ public partial class MainWindow : Window
             r["ContentBrush"] = new SolidColorBrush(Color.Parse("#FFFFFF"));
             r["HeaderBrush"] = new SolidColorBrush(Color.Parse("#F0F4F8"));
             r["BorderBrush"] = new SolidColorBrush(Color.Parse("#D0D7DE"));
-            r["ChatAreaBrush"] = new SolidColorBrush(Color.Parse("#F5F7FA"));
+            r["ChatAreaBrush"] = new SolidColorBrush(Color.Parse("#F0F2F5"));
+            r["MessageReceivedBrush"] = new SolidColorBrush(Color.Parse("#E4E6EB"));
+            r["MessageSentBrush"] = new SolidColorBrush(Color.Parse("#07C160"));
         }
         var accent = AppSettings.AccentColor switch
         {
@@ -373,9 +380,30 @@ public partial class MainWindow : Window
         if (_vm == null) return;
         var friend = FriendList?.SelectedItem as UserInfo;
         if (friend == null) return;
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { AllowMultiple = false, Title = "选择要发送的文件" });
-        if (files.Count > 0 && files[0].TryGetLocalPath() is { } path)
+        try
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { AllowMultiple = false, Title = "选择要发送的文件" });
+            if (files.Count == 0) return;
+            var path = files[0].TryGetLocalPath();
+            if (string.IsNullOrEmpty(path))
+                return;
+            if (Directory.Exists(path))
+            {
+                ShowErrorDialog("请选择文件，不要选择文件夹。");
+                return;
+            }
+            if (!File.Exists(path))
+            {
+                ShowErrorDialog("所选路径不是有效文件。");
+                return;
+            }
             await _vm.SendFileAsync(friend, path);
+        }
+        catch (Exception ex)
+        {
+            Logging.AppLogger.Error("选择或发送文件时出错", ex);
+            ShowErrorDialog($"发送文件失败：{ex.Message}");
+        }
     }
 
     private async void OnSendFolderClick(object? sender, RoutedEventArgs e)
@@ -383,9 +411,25 @@ public partial class MainWindow : Window
         if (_vm == null) return;
         var friend = FriendList?.SelectedItem as UserInfo;
         if (friend == null) return;
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { AllowMultiple = false, Title = "选择要发送的文件夹" });
-        if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path)
+        try
+        {
+            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { AllowMultiple = false, Title = "选择要发送的文件夹" });
+            if (folders.Count == 0) return;
+            var path = folders[0].TryGetLocalPath();
+            if (string.IsNullOrEmpty(path))
+                return;
+            if (!Directory.Exists(path))
+            {
+                ShowErrorDialog("请选择文件夹。");
+                return;
+            }
             await _vm.SendFolderAsync(friend, path);
+        }
+        catch (Exception ex)
+        {
+            Logging.AppLogger.Error("选择或发送文件夹时出错", ex);
+            ShowErrorDialog($"发送文件夹失败：{ex.Message}");
+        }
     }
 
     private async Task<string?> PromptSaveFileAsync(string suggestedName)
