@@ -42,6 +42,21 @@ public sealed class ChatService : IDisposable
     public void SetRecallHandler(Func<string, string, Task> onRecall)
         => _onRecall = onRecall;
 
+    /// <summary>
+    /// 预先建立与对方的连接，避免首条消息发不出去（需对方先回复）的问题。
+    /// </summary>
+    public async Task EnsureConnectionAsync(UserInfo toUser, CancellationToken ct = default)
+    {
+        try
+        {
+            await GetOrCreateConnection(toUser, ct);
+        }
+        catch
+        {
+            // 静默失败，发送时再重试
+        }
+    }
+
     public void Start()
     {
         _listener?.Start();

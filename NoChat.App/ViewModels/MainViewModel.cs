@@ -28,7 +28,6 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     private string? _currentChatGroupId;
     private readonly Dictionary<string, List<ChatMessage>> _privateMessages = new();
     private readonly Dictionary<string, List<ChatMessage>> _groupMessages = new();
-    private readonly HashSet<string> _manualHostIds = new();
     private string _saveFolder = "";
 
     public ObservableCollection<UserInfo> Friends { get; } = new();
@@ -42,9 +41,6 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
 
     private string _displayName = "";
     public string DisplayName { get => _displayName; set { _displayName = value ?? ""; RaisePropertyChanged(); } }
-
-    private string _manualHostIp = "";
-    public string ManualHostIp { get => _manualHostIp; set { _manualHostIp = value ?? ""; RaisePropertyChanged(); } }
 
     public event Action<string>? OnError;
     public event Action<string, string, string, long, Stream>? OnReceiveFileRequest;
@@ -90,22 +86,42 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     {
         Dispatcher.UIThread.Post(() =>
         {
-            var existing = Friends.FirstOrDefault(f => f.Id == user.Id);
+            var existing = Friends.FirstOrDefault(f =>
+                f.IpAddress == user.IpAddress && f.ChatPort == user.ChatPort);
             if (existing != null)
             {
-                var i = Friends.IndexOf(existing);
-                Friends[i] = user;
+                var oldId = existing.Id;
+                existing.Id = user.Id;
+                existing.DisplayName = user.DisplayName;
+                existing.MachineName = user.MachineName;
+                existing.IpAddress = user.IpAddress;
+                existing.ChatPort = user.ChatPort;
+                existing.FilePort = user.FilePort;
+                existing.IsOnline = true;
+                existing.LastSeen = user.LastSeen;
+                if (oldId != user.Id)
+                {
+                    if (_currentChatUserId == oldId)
+                        _currentChatUserId = user.Id;
+                    if (_privateMessages.TryGetValue(oldId, out var oldList))
+                    {
+                        if (!_privateMessages.ContainsKey(user.Id))
+                            _privateMessages[user.Id] = new List<ChatMessage>();
+                        _privateMessages[user.Id].AddRange(oldList);
+                        _privateMessages.Remove(oldId);
+                    }
+                }
             }
             else
             {
                 Friends.Add(user);
             }
+            _ = _chat.EnsureConnectionAsync(user);
         });
     }
 
     private void OnUserOffline(string userId)
     {
-        if (_manualHostIds.Contains(userId)) return;
         Dispatcher.UIThread.Post(() =>
         {
             var u = Friends.FirstOrDefault(f => f.Id == userId);
@@ -115,40 +131,6 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
                 u.LastSeen = DateTime.UtcNow;
             }
         });
-    }
-
-    /// <summary>
-    /// 手动添加主机（发现不可用时输入对方 IP，使用默认端口 25566/25567）
-    /// </summary>
-    public void AddManualHost()
-    {
-        var ip = (ManualHostIp ?? "").Trim();
-        if (string.IsNullOrEmpty(ip))
-        {
-            OnError?.Invoke("请输入要添加的主机 IP 地址");
-            return;
-        }
-        var id = "manual-" + ip;
-        if (Friends.Any(f => f.Id == id))
-        {
-            OnError?.Invoke("该主机已在列表中");
-            return;
-        }
-        var user = new UserInfo
-        {
-            Id = id,
-            DisplayName = ip,
-            MachineName = ip,
-            IpAddress = ip,
-            ChatPort = 25566,
-            FilePort = 25567,
-            IsOnline = true,
-            LastSeen = DateTime.UtcNow
-        };
-        _manualHostIds.Add(id);
-        Friends.Add(user);
-        ManualHostIp = "";
-        AppLogger.Info($"[发现] 已手动添加主机: {ip}");
     }
 
     private Task OnMessageReceived(string senderId, string senderName, ChatMessage msg)
@@ -211,6 +193,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         if (list != null)
             foreach (var m in list)
                 CurrentMessages.Add(new MessageDisplayItem(m, m.SenderId == _discovery.LocalUser.Id));
+        _ = _chat.EnsureConnectionAsync(user);
     }
 
     public async Task SendMessageAsync()
@@ -264,6 +247,20 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         try
         {
             await _fileTransfer.SendFileAsync(user, filePath, _discovery.LocalUser.Id, MyName);
+            var fileName = System.IO.Path.GetFileName(filePath);
+            var msg = new ChatMessage
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                SenderId = _discovery.LocalUser.Id,
+                SenderName = MyName,
+                Content = $"[文件] {fileName}",
+                SentAt = DateTime.UtcNow,
+                SessionId = user.Id,
+                IsGroup = false
+            };
+            GetOrAddList(_privateMessages, user.Id).Add(msg);
+            if (_currentChatUserId == user.Id)
+                CurrentMessages.Add(new MessageDisplayItem(msg, true));
         }
         catch (Exception ex) { OnError?.Invoke(ex.Message); }
     }
@@ -273,8 +270,63 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         try
         {
             await _fileTransfer.SendFolderAsync(user, folderPath, _discovery.LocalUser.Id, MyName);
+            var folderName = System.IO.Path.GetFileName(folderPath.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
+            var msg = new ChatMessage
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                SenderId = _discovery.LocalUser.Id,
+                SenderName = MyName,
+                Content = $"[文件夹] {folderName}",
+                SentAt = DateTime.UtcNow,
+                SessionId = user.Id,
+                IsGroup = false
+            };
+            GetOrAddList(_privateMessages, user.Id).Add(msg);
+            if (_currentChatUserId == user.Id)
+                CurrentMessages.Add(new MessageDisplayItem(msg, true));
         }
         catch (Exception ex) { OnError?.Invoke(ex.Message); }
+    }
+
+    public void AddReceivedFileMessage(string senderId, string senderName, string fileName)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var msg = new ChatMessage
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                SenderId = senderId,
+                SenderName = senderName,
+                Content = $"[收到文件] {fileName}",
+                SentAt = DateTime.UtcNow,
+                SessionId = senderId,
+                IsGroup = false
+            };
+            GetOrAddList(_privateMessages, senderId).Add(msg);
+            if (_currentChatUserId == senderId)
+                CurrentMessages.Add(new MessageDisplayItem(msg, false));
+        });
+    }
+
+    public void AddReceivedFolderMessage(string senderId, string senderName, string folderName)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var content = string.IsNullOrEmpty(folderName) ? "[收到文件夹]" : $"[收到文件夹] {folderName}";
+            var msg = new ChatMessage
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                SenderId = senderId,
+                SenderName = senderName,
+                Content = content,
+                SentAt = DateTime.UtcNow,
+                SessionId = senderId,
+                IsGroup = false
+            };
+            GetOrAddList(_privateMessages, senderId).Add(msg);
+            if (_currentChatUserId == senderId)
+                CurrentMessages.Add(new MessageDisplayItem(msg, false));
+        });
     }
 
     public void Dispose()

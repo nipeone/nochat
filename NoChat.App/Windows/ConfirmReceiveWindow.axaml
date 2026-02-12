@@ -1,0 +1,15 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="NoChat.App.Windows.ConfirmReceiveWindow"
+        Title="接收文件"
+        Width="380" Height="180"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    <StackPanel Margin="24" Spacing="16">
+        <TextBlock x:Name="MessageText" Text="" TextWrapping="Wrap" FontSize="14"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+            <Button Content="拒绝" Click="OnRejectClick"/>
+            <Button Content="接收" Click="OnAcceptClick"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

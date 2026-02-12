@@ -14,6 +14,7 @@
         <SolidColorBrush x:Key="BorderBrush" Color="#252B38"/>
         <SolidColorBrush x:Key="AccentBrush" Color="#5B8DEE"/>
         <SolidColorBrush x:Key="NavSelectedBrush" Color="#285B8DEE"/>
+        <SolidColorBrush x:Key="ChatAreaBrush" Color="#1A1E28"/>
         <converters:FirstCharConverter x:Key="FirstCharConverter"/>
     </Application.Resources>
     <Application.Styles>

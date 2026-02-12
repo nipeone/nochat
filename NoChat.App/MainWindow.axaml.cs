@@ -21,6 +21,8 @@ public partial class MainWindow : Window
 {
     private MainViewModel? _vm;
     private string? _currentReceiveFolder;
+    private TaskCompletionSource<string?>? _folderReceiveTcs;
+    private bool _folderRejected;
     private bool _isExiting;
     private bool _navBusy;
 
@@ -94,34 +96,80 @@ public partial class MainWindow : Window
         {
             if (ChatTitle != null) ChatTitle.Text = $"错误: {msg}";
         });
-        _vm.OnReceiveFileRequest += (senderId, senderName, fileName, size, stream) =>
+        _vm.OnReceiveFileRequest += async (senderId, senderName, fileName, size, stream) =>
         {
+            var confirmTcs = new TaskCompletionSource<bool?>();
             Dispatcher.UIThread.Post(async () =>
             {
-                var path = await PromptSaveFileAsync(fileName);
-                if (path != null && stream != null)
-                {
-                    await using var fs = File.Create(path);
-                    await stream.CopyToAsync(fs);
-                }
+                var w = new Windows.ConfirmReceiveWindow();
+                w.SetMessage(senderName, fileName, size, false);
+                await w.ShowDialog(this);
+                confirmTcs.TrySetResult(w.Result);
             });
+            if (await confirmTcs.Task != true)
+            {
+                if (stream != null) await stream.CopyToAsync(Stream.Null);
+                return;
+            }
+            string? savePath = null;
+            await Dispatcher.UIThread.InvokeAsync(async () => { savePath = await PromptSaveFileAsync(fileName); });
+            if (savePath != null && stream != null)
+            {
+                await using var fs = File.Create(savePath);
+                await stream.CopyToAsync(fs);
+                _vm?.AddReceivedFileMessage(senderId, senderName, fileName);
+            }
         };
-        _vm.OnReceiveFolderRequest += (senderId, senderName, path, isFolder, stream) =>
+        _vm.OnReceiveFolderRequest += async (senderId, senderName, path, isFolder, stream) =>
         {
-            if (stream == Stream.Null) { _currentReceiveFolder = null; return; }
-            Dispatcher.UIThread.Post(async () =>
+            if (stream == Stream.Null)
             {
-                var dir = _currentReceiveFolder ?? await PromptSaveFolderAsync();
-                _currentReceiveFolder = dir;
-                if (dir != null)
+                _vm?.AddReceivedFolderMessage(senderId, senderName, "");
+                _currentReceiveFolder = null;
+                _folderReceiveTcs = null;
+                _folderRejected = false;
+                return;
+            }
+            if (_folderRejected)
+            {
+                await stream.CopyToAsync(Stream.Null);
+                return;
+            }
+            if (_folderReceiveTcs == null)
+            {
+                var confirmTcs = new TaskCompletionSource<bool?>();
+                Dispatcher.UIThread.Post(async () =>
                 {
-                    var fullPath = Path.Combine(dir, path);
-                    var dirPath = Path.GetDirectoryName(fullPath);
-                    if (!string.IsNullOrEmpty(dirPath)) Directory.CreateDirectory(dirPath);
-                    await using var fs = File.Create(fullPath);
-                    await stream.CopyToAsync(fs);
+                    var w = new Windows.ConfirmReceiveWindow();
+                    w.SetMessage(senderName, "文件夹", 0, true);
+                    await w.ShowDialog(this);
+                    confirmTcs.TrySetResult(w.Result);
+                });
+                if (await confirmTcs.Task != true)
+                {
+                    _folderRejected = true;
+                    await stream.CopyToAsync(Stream.Null);
+                    return;
                 }
-            });
+                _folderReceiveTcs = new TaskCompletionSource<string?>();
+                Dispatcher.UIThread.Post(async () =>
+                {
+                    var dir = await PromptSaveFolderAsync();
+                    _currentReceiveFolder = dir;
+                    _folderReceiveTcs?.TrySetResult(dir);
+                });
+            }
+            var dir2 = await _folderReceiveTcs!.Task;
+            if (dir2 != null)
+            {
+                var fullPath = Path.Combine(dir2, path);
+                var dirPath = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrEmpty(dirPath)) Directory.CreateDirectory(dirPath);
+                await using var fs = File.Create(fullPath);
+                await stream.CopyToAsync(fs);
+            }
+            else
+                await stream.CopyToAsync(Stream.Null);
         };
     }
 
@@ -148,6 +196,7 @@ public partial class MainWindow : Window
             r["ContentBrush"] = new SolidColorBrush(Color.Parse("#0F1117"));
             r["HeaderBrush"] = new SolidColorBrush(Color.Parse("#161B26"));
             r["BorderBrush"] = new SolidColorBrush(Color.Parse("#252B38"));
+            r["ChatAreaBrush"] = new SolidColorBrush(Color.Parse("#13161E"));
         }
         else
         {
@@ -155,6 +204,7 @@ public partial class MainWindow : Window
             r["ContentBrush"] = new SolidColorBrush(Color.Parse("#FFFFFF"));
             r["HeaderBrush"] = new SolidColorBrush(Color.Parse("#F0F4F8"));
             r["BorderBrush"] = new SolidColorBrush(Color.Parse("#D0D7DE"));
+            r["ChatAreaBrush"] = new SolidColorBrush(Color.Parse("#F5F7FA"));
         }
         var accent = AppSettings.AccentColor switch
         {
@@ -288,9 +338,20 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnAddManualHostClick(object? sender, RoutedEventArgs e)
+    private async void OnRecallMessageClick(object? sender, RoutedEventArgs e)
     {
-        _vm?.AddManualHost();
+        if (_vm == null) return;
+        MessageDisplayItem? item = null;
+        if (sender is Avalonia.Controls.MenuItem menuItem)
+        {
+            var ctx = menuItem.Parent as Avalonia.Controls.ContextMenu;
+            var target = ctx?.PlacementTarget as Avalonia.Controls.Control;
+            item = target?.DataContext as MessageDisplayItem;
+        }
+        else if (sender is Avalonia.Controls.Button btn)
+            item = btn.DataContext as MessageDisplayItem;
+        if (item != null)
+            await _vm.RecallMessageAsync(item);
     }
 
     private void OnInputKeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
