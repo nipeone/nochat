@@ -12,14 +12,16 @@ public partial class ConfirmReceiveWindow : Window
         InitializeComponent();
     }
 
-    public void SetMessage(string senderName, string fileName, long size, bool isFolder)
+    public void SetMessage(string senderName, string fileName, long sizeOrFileCount, bool isFolder)
     {
         if (MessageText == null) return;
-        var sizeStr = size < 1024 ? $"{size} B" : size < 1024 * 1024 ? $"{size / 1024.0:F1} KB" : $"{size / (1024.0 * 1024):F1} MB";
         MessageText.Text = isFolder
-            ? $"{senderName} 想发送文件夹「{fileName}」给你，是否接收？"
-            : $"{senderName} 想发送文件「{fileName}」({sizeStr}) 给你，是否接收？";
+            ? $"{senderName} 想发送文件夹「{fileName}」（共 {sizeOrFileCount} 个文件）给你，是否接收？"
+            : $"{senderName} 想发送文件「{fileName}」({FormatSize(sizeOrFileCount)}) 给你，是否接收？";
     }
+
+    private static string FormatSize(long size)
+        => size < 1024 ? $"{size} B" : size < 1024 * 1024 ? $"{size / 1024.0:F1} KB" : $"{size / (1024.0 * 1024):F1} MB";
 
     private void OnAcceptClick(object? sender, RoutedEventArgs e)
     {

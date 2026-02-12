@@ -1,11 +1,12 @@
 using System;
 using System.IO;
+using NoChat.App.Settings;
 
 namespace NoChat.App.Logging;
 
 /// <summary>
 /// 简单文件日志，便于用户排查崩溃与发现失败原因。
-/// 日志目录：Data/nochat.log
+/// 日志路径：用户应用数据目录下的 nochat.log（单文件发布也可持久保存）
 /// </summary>
 public static class AppLogger
 {
@@ -20,10 +21,7 @@ public static class AppLogger
             if (_initialized) return;
             try
             {
-                var dir = Path.Combine(AppContext.BaseDirectory, "Data");
-                if (!Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
-                _logPath = Path.Combine(dir, "nochat.log");
+                _logPath = Path.Combine(AppDataPath.Root, "nochat.log");
                 _initialized = true;
                 Info("NoChat 启动，日志已启用。");
             }

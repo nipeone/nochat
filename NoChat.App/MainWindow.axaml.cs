@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -21,9 +23,6 @@ namespace NoChat.App;
 public partial class MainWindow : Window
 {
     private MainViewModel? _vm;
-    private string? _currentReceiveFolder;
-    private TaskCompletionSource<string?>? _folderReceiveTcs;
-    private bool _folderRejected;
     private bool _isExiting;
     private bool _navBusy;
 
@@ -44,6 +43,34 @@ public partial class MainWindow : Window
     {
         _isExiting = true;
         Close();
+    }
+
+    /// <summary>显示窗口并切换到未读会话（双击托盘时调用），若有未读则选中对应好友并显示消息</summary>
+    public void ShowAndSelectUnreadChat()
+    {
+        var vm = _vm;
+        if (vm == null)
+        {
+            Show();
+            Activate();
+            return;
+        }
+        var senderId = vm.LastUnreadSenderId;
+        if (!string.IsNullOrEmpty(senderId))
+        {
+            var user = vm.Friends.FirstOrDefault(f => f.Id == senderId);
+            if (user != null)
+            {
+                vm.SelectPrivateChat(user);
+                if (FriendList != null) FriendList.SelectedItem = user;
+                if (ChatTitle != null) ChatTitle.Text = user.DisplayName;
+                if (ChatSubtitle != null) ChatSubtitle.Text = "在线";
+                if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (user.DisplayName.Length > 0 ? char.ToUpperInvariant(user.DisplayName[0]) : '?').ToString();
+                if (ChatPanel != null) ChatPanel.IsVisible = true;
+            }
+        }
+        Show();
+        Activate();
     }
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
@@ -73,7 +100,7 @@ public partial class MainWindow : Window
                 await dialog.ShowDialog(this);
                 choice = dialog.Choice;
                 if (dialog.RememberChoice && choice != CloseChoice.None)
-                    AppSettings.SavedCloseChoice = choice;
+                    AppSettings.SaveClosePreference(choice);
             }
         }
 
@@ -110,6 +137,16 @@ public partial class MainWindow : Window
         {
             if (ChatTitle != null) ChatTitle.Text = $"错误: {msg}";
         });
+        _vm.OnUnreadMessage += (senderId, senderName, preview) =>
+        {
+            var app = Application.Current as App;
+            app?.ShowTrayNotification($"来自 {senderName}", preview);
+            app?.StartTrayBlink();
+        };
+        _vm.OnSessionViewed += () =>
+        {
+            (Application.Current as App)?.StopTrayBlink();
+        };
         _vm.SetFileRequestHandler(async (senderId, senderName, fileName, size) =>
         {
             var tcs = new TaskCompletionSource<bool?>();
@@ -133,61 +170,36 @@ public partial class MainWindow : Window
                 _vm?.AddReceivedFileMessage(senderId, senderName, fileName);
             }
         };
-        _vm.OnReceiveFolderRequest += async (senderId, senderName, path, folderName, isFolder, stream) =>
+        _vm.SetFolderStartHandler(async (senderId, senderName, folderName, fileCount) =>
         {
-            if (stream == Stream.Null)
+            var confirmTcs = new TaskCompletionSource<bool?>();
+            await Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                _vm?.AddReceivedFolderMessage(senderId, senderName, folderName);
-                _currentReceiveFolder = null;
-                _folderReceiveTcs = null;
-                _folderRejected = false;
-                return;
-            }
-            if (_folderRejected)
+                var w = new Windows.ConfirmReceiveWindow();
+                w.SetMessage(senderName, folderName, fileCount, true);
+                await w.ShowDialog(this);
+                confirmTcs.TrySetResult(w.Result);
+            });
+            if (await confirmTcs.Task != true)
+                return (false, null);
+            var dirTcs = new TaskCompletionSource<string?>();
+            await Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                await stream.CopyToAsync(Stream.Null);
-                return;
-            }
-            if (_folderReceiveTcs == null)
-            {
-                var confirmTcs = new TaskCompletionSource<bool?>();
-                Dispatcher.UIThread.Post(async () =>
-                {
-                    var w = new Windows.ConfirmReceiveWindow();
-                    w.SetMessage(senderName, folderName, 0, true);
-                    await w.ShowDialog(this);
-                    confirmTcs.TrySetResult(w.Result);
-                });
-                if (await confirmTcs.Task != true)
-                {
-                    _folderRejected = true;
-                    await stream.CopyToAsync(Stream.Null);
-                    return;
-                }
-                _folderReceiveTcs = new TaskCompletionSource<string?>();
-                Dispatcher.UIThread.Post(async () =>
-                {
-                    var dir = await PromptSaveFolderAsync();
-                    _currentReceiveFolder = dir;
-                    _folderReceiveTcs?.TrySetResult(dir);
-                });
-            }
-            var dir2 = await _folderReceiveTcs!.Task;
-            if (dir2 != null)
-            {
-                var baseDir = Path.Combine(dir2, folderName);
-                var fullPath = Path.Combine(baseDir, path);
-                var dirPath = Path.GetDirectoryName(fullPath);
-                if (!string.IsNullOrEmpty(dirPath)) Directory.CreateDirectory(dirPath);
-                await using var fs = File.Create(fullPath);
-                await stream.CopyToAsync(fs);
-            }
-            else
-            {
-                _folderRejected = true;
-                await stream.CopyToAsync(Stream.Null);
-            }
-        };
+                var dir = await PromptSaveFolderAsync();
+                dirTcs.TrySetResult(dir);
+            });
+            var dir = await dirTcs.Task;
+            return (dir != null, dir);
+        });
+        _vm.SetFolderFileHandler(async (senderId, senderName, relativePath, folderName, stream, saveDir) =>
+        {
+            var baseDir = Path.Combine(saveDir, folderName);
+            var fullPath = Path.Combine(baseDir, relativePath);
+            var dirPath = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(dirPath)) Directory.CreateDirectory(dirPath);
+            await using var fs = File.Create(fullPath);
+            await stream.CopyToAsync(fs);
+        });
     }
 
     private void ApplyThemeFromSettings()
@@ -353,6 +365,7 @@ public partial class MainWindow : Window
         if (e.AddedItems[0] is UserInfo user)
         {
             _vm.SelectPrivateChat(user);
+            (Application.Current as App)?.StopTrayBlink();
             if (ChatTitle != null) ChatTitle.Text = user.DisplayName;
             if (ChatSubtitle != null) ChatSubtitle.Text = "在线";
             if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (user.DisplayName.Length > 0 ? char.ToUpperInvariant(user.DisplayName[0]) : '?').ToString();

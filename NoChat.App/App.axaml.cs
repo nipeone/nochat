@@ -14,8 +14,13 @@ namespace NoChat.App;
 public partial class App : Application
 {
     private TrayIcon? _trayIcon;
+    private WindowIcon? _trayIconNormal;
+    private WindowIcon? _trayIconAlert;
     private DateTime _lastTrayClickTime = DateTime.MinValue;
     private const int DoubleClickMs = 400;
+    private const string DefaultToolTipText = "NoChat - 局域网聊天";
+    private DispatcherTimer? _blinkTimer;
+    private MainWindow? _mainWindow;
 
     public override void Initialize()
     {
@@ -67,13 +72,17 @@ public partial class App : Application
 
     private void CreateTrayIcon(MainWindow mainWindow)
     {
+        _mainWindow = mainWindow;
         try
         {
-            using var stream = IconHelper.CreateAppIconStream();
+            using (var s0 = IconHelper.CreateAppIconStream(false))
+                _trayIconNormal = new WindowIcon(s0);
+            using (var s1 = IconHelper.CreateAppIconStream(true))
+                _trayIconAlert = new WindowIcon(s1);
             _trayIcon = new TrayIcon
             {
-                Icon = new WindowIcon(stream),
-                ToolTipText = "NoChat - 局域网聊天"
+                Icon = _trayIconNormal,
+                ToolTipText = DefaultToolTipText
             };
 
             _trayIcon.Clicked += (_, _) =>
@@ -82,8 +91,7 @@ public partial class App : Application
                 if ((now - _lastTrayClickTime).TotalMilliseconds <= DoubleClickMs)
                 {
                     _lastTrayClickTime = DateTime.MinValue;
-                    mainWindow.Show();
-                    mainWindow.Activate();
+                    mainWindow.ShowAndSelectUnreadChat();
                 }
                 else
                     _lastTrayClickTime = now;
@@ -107,6 +115,41 @@ public partial class App : Application
         catch
         {
             // 部分环境可能不支持托盘
+        }
+    }
+
+    /// <summary>显示托盘提示并开始闪烁（新消息未读时由 MainWindow 调用）</summary>
+    public void ShowTrayNotification(string title, string message)
+    {
+        if (_trayIcon == null) return;
+        _trayIcon.ToolTipText = string.IsNullOrEmpty(message) ? title : $"{title}: {message}";
+    }
+
+    /// <summary>开始托盘图标闪烁（固定位置切换正常/高亮图标，不隐藏）</summary>
+    public void StartTrayBlink()
+    {
+        if (_trayIcon == null || _trayIconNormal == null || _trayIconAlert == null) return;
+        StopTrayBlink();
+        var useAlert = false;
+        _blinkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _blinkTimer.Tick += (_, _) =>
+        {
+            if (_trayIcon == null || _trayIconNormal == null || _trayIconAlert == null) return;
+            useAlert = !useAlert;
+            _trayIcon.Icon = useAlert ? _trayIconAlert : _trayIconNormal;
+        };
+        _blinkTimer.Start();
+    }
+
+    /// <summary>停止闪烁并恢复托盘状态（会话已读时由 MainWindow 调用）</summary>
+    public void StopTrayBlink()
+    {
+        _blinkTimer?.Stop();
+        _blinkTimer = null;
+        if (_trayIcon != null && _trayIconNormal != null)
+        {
+            _trayIcon.Icon = _trayIconNormal;
+            _trayIcon.ToolTipText = DefaultToolTipText;
         }
     }
 }

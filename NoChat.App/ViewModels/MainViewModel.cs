@@ -26,6 +26,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     private readonly FileTransferService _fileTransfer;
     private string? _currentChatUserId;
     private string? _currentChatGroupId;
+    private string? _lastUnreadSenderId;
     private readonly Dictionary<string, List<ChatMessage>> _privateMessages = new();
     private readonly Dictionary<string, List<ChatMessage>> _groupMessages = new();
     private string _saveFolder = "";
@@ -43,10 +44,20 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     public string DisplayName { get => _displayName; set { _displayName = value ?? ""; RaisePropertyChanged(); } }
 
     public event Action<string>? OnError;
+    /// <summary>当收到消息且当前未打开与该发送者的聊天时触发（senderId, senderName, contentPreview）</summary>
+    public event Action<string, string, string>? OnUnreadMessage;
+    /// <summary>当用户打开某个会话（已读）时触发，用于停止托盘闪烁等</summary>
+    public event Action? OnSessionViewed;
+    /// <summary>最近一条未读消息的发送者 Id，用于双击托盘时切换到该会话；已读后清空</summary>
+    public string? LastUnreadSenderId => _lastUnreadSenderId;
     public event Action<string, string, string, long, Stream>? OnReceiveFileRequest;
-    public event Action<string, string, string, string, bool, Stream>? OnReceiveFolderRequest;
     private Func<string, string, string, long, Task<bool>>? _fileRequestHandler;
     public void SetFileRequestHandler(Func<string, string, string, long, Task<bool>> handler) => _fileRequestHandler = handler;
+    /// <summary>文件夹接收：一次确认 + 一次选择保存目录，由传输层在收每个文件前只调用一次</summary>
+    private Func<string, string, string, int, Task<(bool accept, string? saveDir)>>? _folderStartHandler;
+    private Func<string, string, string, string, Stream, string, Task>? _folderFileHandler;
+    public void SetFolderStartHandler(Func<string, string, string, int, Task<(bool accept, string? saveDir)>> handler) { _folderStartHandler = handler; }
+    public void SetFolderFileHandler(Func<string, string, string, string, Stream, string, Task> handler) { _folderFileHandler = handler; }
 
     public MainViewModel()
     {
@@ -60,7 +71,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
             _discovery.LocalUser.Id,
             _discovery.LocalUser.DisplayName,
             chatPort);
-        _fileTransfer = new FileTransferService(filePort, OnFileRequest, OnFileReceived, OnFolderReceived);
+        _fileTransfer = new FileTransferService(filePort, OnFileRequest, OnFileReceived, OnFolderStart, OnReceiveFolderFile, OnFolderComplete);
 
         _discovery.UserDiscovered += OnUserDiscovered;
         _discovery.UserOffline += OnUserOffline;
@@ -143,10 +154,17 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
                 ? GetOrAddList(_groupMessages, msg.SessionId ?? "")
                 : GetOrAddList(_privateMessages, msg.SessionId ?? senderId);
             list.Add(msg);
-            if ((msg.IsGroup && _currentChatGroupId == msg.SessionId) ||
-                (!msg.IsGroup && _currentChatUserId == senderId))
+            var isCurrentChat = (msg.IsGroup && _currentChatGroupId == msg.SessionId) ||
+                (!msg.IsGroup && _currentChatUserId == senderId);
+            if (isCurrentChat)
             {
                 CurrentMessages.Add(new MessageDisplayItem(msg, false));
+            }
+            else
+            {
+                _lastUnreadSenderId = senderId;
+                var preview = msg.Content?.Length > 50 ? msg.Content.Substring(0, 50) + "…" : (msg.Content ?? "");
+                OnUnreadMessage?.Invoke(senderId, senderName, preview);
             }
         });
         return Task.CompletedTask;
@@ -188,13 +206,14 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
-    private Task OnFolderReceived(string senderId, string senderName, string path, string folderName, bool isFolder, Stream stream)
-    {
-        if (stream == Stream.Null)
-            return Task.CompletedTask;
-        OnReceiveFolderRequest?.Invoke(senderId, senderName, path, folderName, isFolder, stream);
-        return Task.CompletedTask;
-    }
+    private Task<(bool accept, string? saveDir)> OnFolderStart(string senderId, string senderName, string folderName, int fileCount)
+        => _folderStartHandler != null ? _folderStartHandler(senderId, senderName, folderName, fileCount) : Task.FromResult((false, (string?)null));
+
+    private Task OnReceiveFolderFile(string senderId, string senderName, string relativePath, string folderName, Stream stream, string saveDir)
+        => _folderFileHandler != null ? _folderFileHandler(senderId, senderName, relativePath, folderName, stream, saveDir) : Task.CompletedTask;
+
+    private void OnFolderComplete(string senderId, string senderName, string folderName)
+        => AddReceivedFolderMessage(senderId, senderName, folderName);
 
     public void SelectPrivateChat(UserInfo user)
     {
@@ -205,6 +224,8 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         if (list != null)
             foreach (var m in list)
                 CurrentMessages.Add(new MessageDisplayItem(m, m.SenderId == _discovery.LocalUser.Id));
+        _lastUnreadSenderId = null;
+        OnSessionViewed?.Invoke();
         _ = _chat.EnsureConnectionAsync(user);
     }
 

@@ -14,18 +14,25 @@ public sealed class FileTransferService : IDisposable
     private readonly int _listenPort;
     private readonly Func<string, string, string, long, Task<bool>>? _onFileRequest;
     private readonly Func<string, string, string, long, Stream, Task>? _onReceiveFile;
-    private readonly Func<string, string, string, string, bool, Stream, Task>? _onReceiveFolder;
+    /// <summary>文件夹：先调用一次获取 (是否接收, 保存目录)，再对每个文件调用 (相对路径, 流, 保存目录)，最后调用完成</summary>
+    private readonly Func<string, string, string, int, Task<(bool accept, string? saveDir)>>? _onFolderStart;
+    private readonly Func<string, string, string, string, Stream, string, Task>? _onReceiveFolderFile;
+    private readonly Action<string, string, string>? _onFolderComplete;
 
     public FileTransferService(
         int listenPort,
         Func<string, string, string, long, Task<bool>>? onFileRequest = null,
         Func<string, string, string, long, Stream, Task>? onReceiveFile = null,
-        Func<string, string, string, string, bool, Stream, Task>? onReceiveFolder = null)
+        Func<string, string, string, int, Task<(bool accept, string? saveDir)>>? onFolderStart = null,
+        Func<string, string, string, string, Stream, string, Task>? onReceiveFolderFile = null,
+        Action<string, string, string>? onFolderComplete = null)
     {
         _listenPort = listenPort;
         _onFileRequest = onFileRequest;
         _onReceiveFile = onReceiveFile;
-        _onReceiveFolder = onReceiveFolder;
+        _onFolderStart = onFolderStart;
+        _onReceiveFolderFile = onReceiveFolderFile;
+        _onFolderComplete = onFolderComplete;
         _listener = new TcpListener(IPAddress.Any, listenPort);
     }
 
@@ -37,7 +44,7 @@ public sealed class FileTransferService : IDisposable
 
     public void Stop()
     {
-        _cts.Cancel();
+        try { _cts.Cancel(); } catch (ObjectDisposedException) { /* 已 Dispose 时再次调用 Stop 忽略 */ }
         _listener.Stop();
     }
 
@@ -70,18 +77,29 @@ public sealed class FileTransferService : IDisposable
             {
                 var folderName = name;
                 var count = reader.ReadInt32();
+                var (accept, saveDir) = _onFolderStart != null
+                    ? await _onFolderStart(senderId, senderName, folderName, count)
+                    : (false, (string?)null);
+                if (!accept || string.IsNullOrEmpty(saveDir))
+                {
+                    for (var i = 0; i < count; i++)
+                    {
+                        var fileSize = reader.ReadInt64();
+                        await SkipStreamAsync(stream, fileSize);
+                    }
+                    return;
+                }
                 for (var i = 0; i < count; i++)
                 {
-                    var fileName = reader.ReadString();
+                    var relativePath = reader.ReadString();
                     var fileSize = reader.ReadInt64();
-                    await ReadStreamToAction(stream, fileSize, async (s) =>
-                    {
-                        if (_onReceiveFolder != null)
-                            await _onReceiveFolder(senderId, senderName, fileName, folderName, true, s);
-                    });
+                    if (_onReceiveFolderFile != null)
+                        await ReadStreamToAction(stream, fileSize, async (s) =>
+                            await _onReceiveFolderFile(senderId, senderName, relativePath, folderName, s, saveDir));
+                    else
+                        await SkipStreamAsync(stream, fileSize);
                 }
-                if (_onReceiveFolder != null)
-                    await _onReceiveFolder(senderId, senderName, folderName, folderName, true, Stream.Null);
+                _onFolderComplete?.Invoke(senderId, senderName, folderName);
             }
             else
             {

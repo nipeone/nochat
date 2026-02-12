@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using NoChat.App.Logging;
@@ -10,6 +11,18 @@ class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--write-icon-to" && i + 1 < args.Length)
+            {
+                var path = args[i + 1];
+                if (path.Contains("Assets") && !Path.IsPathRooted(path))
+                    path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", path));
+                NoChat.App.Assets.IconHelper.WriteIconToFile(path);
+                return;
+            }
+        }
+
         AppLogger.Init();
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {

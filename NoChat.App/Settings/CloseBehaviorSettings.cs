@@ -12,10 +12,7 @@ public static class CloseBehaviorSettings
 
     private static string GetFilePath()
     {
-        var dir = Path.Combine(AppContext.BaseDirectory, "Data");
-        if (!Directory.Exists(dir))
-            Directory.CreateDirectory(dir);
-        return Path.Combine(dir, FileName);
+        return Path.Combine(AppDataPath.Root, FileName);
     }
 
     public static CloseChoice? Load()

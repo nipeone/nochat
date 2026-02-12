@@ -1,0 +1,28 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="appGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#65E6F5" />
+      <stop offset="100%" stop-color="#5572EC" />
+    </linearGradient>
+
+    <mask id="iconMask">
+      <g fill="white">
+        <circle cx="256" cy="245" r="140" />
+        <path d="M 160 345 Q 120 400 120 410 Q 150 390 190 375 L 160 345 Z" />
+      </g>
+
+      <g fill="black" stroke="black" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="256" y1="245" x2="186" y2="245" />
+        <line x1="256" y1="245" x2="291" y2="185" />
+        <line x1="256" y1="245" x2="291" y2="305" />
+        
+        <circle cx="186" cy="245" r="18" stroke="none" /> <circle cx="291" cy="185" r="18" stroke="none" /> <circle cx="291" cy="305" r="18" stroke="none" /> <circle cx="256" cy="245" r="13" stroke="none" />
+      </g>
+    </mask>
+  </defs>
+
+  <rect width="512" height="512" rx="120" ry="120" fill="url(#appGradient)" />
+
+  <rect width="512" height="512" fill="white" mask="url(#iconMask)" fill-opacity="1" />
+  
+</svg>

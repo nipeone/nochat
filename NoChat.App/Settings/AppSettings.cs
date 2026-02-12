@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NoChat.App.Logging;
 
 namespace NoChat.App.Settings;
 
@@ -37,10 +38,7 @@ public static class AppSettings
 
     private static string GetFilePath()
     {
-        var dir = Path.Combine(AppContext.BaseDirectory, "Data");
-        if (!Directory.Exists(dir))
-            Directory.CreateDirectory(dir);
-        return Path.Combine(dir, FileName);
+        return Path.Combine(AppDataPath.Root, FileName);
     }
 
     public static ThemeMode ThemeMode
@@ -73,26 +71,76 @@ public static class AppSettings
         set { var s = Load(); s.SavedCloseChoice = value; Save(s); }
     }
 
+    /// <summary>
+    /// 保存关闭时的用户选择（勾选“记住我的选择”时调用），同时写入 CloseBehavior 与 SavedCloseChoice，启动时优先用 CloseBehavior。
+    /// </summary>
+    public static void SaveClosePreference(CloseChoice choice)
+    {
+        if (choice == CloseChoice.None) return;
+        var s = Load();
+        s.SavedCloseChoice = choice;
+        s.CloseBehavior = choice == CloseChoice.Exit ? CloseBehavior.ExitProgram : CloseBehavior.MinimizeToTray;
+        Save(s);
+    }
+
     public static AppSettingsData Load()
     {
+        string path;
         try
         {
-            var path = GetFilePath();
-            if (!File.Exists(path)) return new AppSettingsData();
+            path = GetFilePath();
+            AppLogger.Info($"[配置] Load: 路径={path}, 目录存在={Directory.Exists(Path.GetDirectoryName(path))}");
+            if (!File.Exists(path))
+            {
+                AppLogger.Info("[配置] Load: 文件不存在，将创建默认并保存");
+                var defaults = new AppSettingsData();
+                Save(defaults);
+                return defaults;
+            }
             var json = File.ReadAllText(path);
+            AppLogger.Info($"[配置] Load: 已读取 {json.Length} 字节");
             var data = JsonSerializer.Deserialize<AppSettingsData>(json);
+            AppLogger.Info("[配置] Load: 反序列化成功");
             return data ?? new AppSettingsData();
         }
-        catch { return new AppSettingsData(); }
+        catch (Exception ex)
+        {
+            AppLogger.Error("[配置] Load 异常", ex);
+            AppLogger.Info($"[配置] Load: 使用内存默认值");
+            var defaults = new AppSettingsData();
+            try
+            {
+                Save(defaults);
+                AppLogger.Info("[配置] Load: 默认值保存成功");
+            }
+            catch (Exception saveEx)
+            {
+                AppLogger.Error("[配置] Load: 默认值保存失败", saveEx);
+            }
+            return defaults;
+        }
     }
 
     public static void Save(AppSettingsData data)
     {
         try
         {
-            File.WriteAllText(GetFilePath(), JsonSerializer.Serialize(data, JsonOptions));
+            var path = GetFilePath();
+            var json = JsonSerializer.Serialize(data, JsonOptions);
+            AppLogger.Info($"[配置] Save: 路径={path}, 内容长度={json.Length}");
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                AppLogger.Info($"[配置] Save: 创建目录 {dir}");
+                Directory.CreateDirectory(dir);
+            }
+            File.WriteAllText(path, json);
+            AppLogger.Info("[配置] Save: 写入成功");
         }
-        catch { /* ignore */ }
+        catch (Exception ex)
+        {
+            AppLogger.Error("[配置] Save 异常", ex);
+        }
     }
 }
 

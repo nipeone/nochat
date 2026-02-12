@@ -65,7 +65,7 @@ public sealed class ChatService : IDisposable
 
     public void Stop()
     {
-        _cts.Cancel();
+        try { _cts.Cancel(); } catch (ObjectDisposedException) { /* 已 Dispose 时再次调用 Stop 忽略 */ }
         _listener?.Stop();
         foreach (var c in _outgoingConnections.Values)
             try { c.Close(); } catch { }
