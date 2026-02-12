@@ -29,11 +29,6 @@ public enum CloseChoice
 
 public static class AppSettings
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = false,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
     private const string FileName = "nochat-settings.json";
 
     private static string GetFilePath()
@@ -99,7 +94,7 @@ public static class AppSettings
             }
             var json = File.ReadAllText(path);
             AppLogger.Info($"[配置] Load: 已读取 {json.Length} 字节");
-            var data = JsonSerializer.Deserialize<AppSettingsData>(json);
+            var data = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettingsData);
             AppLogger.Info("[配置] Load: 反序列化成功");
             return data ?? new AppSettingsData();
         }
@@ -126,7 +121,7 @@ public static class AppSettings
         try
         {
             var path = GetFilePath();
-            var json = JsonSerializer.Serialize(data, JsonOptions);
+            var json = JsonSerializer.Serialize(data, AppSettingsJsonContext.Default.AppSettingsData);
             AppLogger.Info($"[配置] Save: 路径={path}, 内容长度={json.Length}");
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))

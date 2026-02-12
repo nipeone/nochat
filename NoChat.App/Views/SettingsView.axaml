@@ -26,17 +26,21 @@
 
             <StackPanel Spacing="12">
                 <TextBlock Text="常规" FontSize="14" FontWeight="Medium" Opacity="0.9"/>
-                <TextBlock Text="关闭按钮行为" FontSize="13" Opacity="0.85"/>
-                <ComboBox x:Name="CloseBehaviorCombo" Width="220" HorizontalAlignment="Left"
-                          SelectionChanged="OnCloseBehaviorChanged">
-                    <ComboBoxItem Content="每次询问"/>
-                    <ComboBoxItem Content="最小化到托盘"/>
-                    <ComboBoxItem Content="退出程序"/>
-                </ComboBox>
-                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,12,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,8">
                     <TextBlock Text="开机启动" FontSize="13" Opacity="0.85" VerticalAlignment="Center"/>
                     <ToggleSwitch x:Name="StartOnBootSwitch" IsCheckedChanged="OnStartOnBootChanged"/>
                 </StackPanel>
+            </StackPanel>
+
+            <StackPanel Spacing="12">
+                <TextBlock Text="程序关闭" FontSize="14" FontWeight="Medium" Opacity="0.9"/>
+                <TextBlock Text="点击窗口关闭按钮（×）时的行为" FontSize="13" Opacity="0.85"/>
+                <ComboBox x:Name="CloseBehaviorCombo" Width="240" HorizontalAlignment="Left"
+                          SelectionChanged="OnCloseBehaviorChanged">
+                    <ComboBoxItem Content="每次询问（弹窗选择最小化或退出）"/>
+                    <ComboBoxItem Content="最小化到托盘"/>
+                    <ComboBoxItem Content="直接退出程序"/>
+                </ComboBox>
             </StackPanel>
 
             <StackPanel x:Name="NetworkSection" Spacing="12">
