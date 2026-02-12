@@ -84,18 +84,14 @@ public static class AppSettings
         try
         {
             path = GetFilePath();
-            AppLogger.Info($"[配置] Load: 路径={path}, 目录存在={Directory.Exists(Path.GetDirectoryName(path))}");
             if (!File.Exists(path))
             {
-                AppLogger.Info("[配置] Load: 文件不存在，将创建默认并保存");
                 var defaults = new AppSettingsData();
                 Save(defaults);
                 return defaults;
             }
             var json = File.ReadAllText(path);
-            AppLogger.Info($"[配置] Load: 已读取 {json.Length} 字节");
             var data = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettingsData);
-            AppLogger.Info("[配置] Load: 反序列化成功");
             return data ?? new AppSettingsData();
         }
         catch (Exception ex)

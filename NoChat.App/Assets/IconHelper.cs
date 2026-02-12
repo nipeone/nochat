@@ -11,8 +11,8 @@ public static class IconHelper
     private const string LogoResourceName = "NoChat.App.logo.svg";
     private const int IconSize = 256;
 
-    /// <param name="forAlert">为 true 时绘制高亮效果（用于托盘“新消息”闪烁），图标保持在固定位置切换</param>
-    public static Stream CreateAppIconStream(bool forAlert = false)
+    /// <param name="opacity">0~1，小于 1 时整体半透明（用于托盘闪烁：不透明/透明切换）</param>
+    public static Stream CreateAppIconStream(float opacity = 1f)
     {
         Stream? svgStream = null;
         var assembly = Assembly.GetExecutingAssembly();
@@ -25,7 +25,7 @@ public static class IconHelper
                 svgStream = File.OpenRead(logoPath);
         }
         if (svgStream == null)
-            return CreateFallbackIconStream(forAlert);
+            return CreateFallbackIconStream(opacity);
         using (svgStream)
         {
         try
@@ -36,7 +36,7 @@ public static class IconHelper
             var width = bounds.Width;
             var height = bounds.Height;
             if (width <= 0 || height <= 0)
-                return CreateFallbackIconStream(forAlert);
+                return CreateFallbackIconStream(opacity);
 
             var scale = Math.Min((float)IconSize / width, (float)IconSize / height);
             var w = (int)(width * scale);
@@ -50,30 +50,40 @@ public static class IconHelper
             canvas.Clear(SKColors.Transparent);
             canvas.Scale((float)scale);
             canvas.DrawPicture(skSvg.Picture);
-            if (forAlert)
-            {
-                canvas.ResetMatrix();
-                using var paint = new SKPaint
-                {
-                    Color = new SKColor(255, 220, 80, 140),
-                    IsAntialias = true
-                };
-                canvas.DrawRoundRect(0, 0, w, h, 12, 12, paint);
-            }
             canvas.Flush();
 
-            var ms = new MemoryStream();
-            using (var image = surface.Snapshot())
-            using (var png = image.Encode(SKEncodedImageFormat.Png, 100))
+            if (opacity >= 1f)
             {
-                png.SaveTo(ms);
+                var ms = new MemoryStream();
+                using (var image = surface.Snapshot())
+                using (var png = image.Encode(SKEncodedImageFormat.Png, 100))
+                    png.SaveTo(ms);
+                ms.Position = 0;
+                return ms;
             }
-            ms.Position = 0;
-            return ms;
+            // 整体透明度：再绘到新 surface 并乘 alpha
+            var alpha = (byte)(255 * Math.Clamp(opacity, 0f, 1f));
+            using var surface2 = SKSurface.Create(new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul));
+            var c2 = surface2.Canvas;
+            c2.Clear(SKColors.Transparent);
+            using (var img = surface.Snapshot())
+            using (var layerPaint = new SKPaint { Color = new SKColor(255, 255, 255, alpha) })
+            {
+                c2.SaveLayer(layerPaint);
+                c2.DrawImage(img, 0, 0);
+                c2.Restore();
+            }
+            c2.Flush();
+            var ms2 = new MemoryStream();
+            using (var image = surface2.Snapshot())
+            using (var png = image.Encode(SKEncodedImageFormat.Png, 100))
+                png.SaveTo(ms2);
+            ms2.Position = 0;
+            return ms2;
         }
         catch
         {
-            return CreateFallbackIconStream(forAlert);
+            return CreateFallbackIconStream(opacity);
         }
     }
     }
@@ -106,21 +116,30 @@ public static class IconHelper
         bw.Flush();
     }
 
-    private static Stream CreateFallbackIconStream(bool forAlert = false)
+    private static Stream CreateFallbackIconStream(float opacity = 1f)
     {
         var ms = new MemoryStream();
         using (var image = new SKBitmap(IconSize, IconSize, SKColorType.Rgba8888, SKAlphaType.Premul))
         {
             using var canvas = new SKCanvas(image);
             canvas.Clear(new SKColor(101, 230, 245));
-            if (forAlert)
-            {
-                using var paint = new SKPaint { Color = new SKColor(255, 220, 80, 140), IsAntialias = true };
-                canvas.DrawRoundRect(0, 0, IconSize, IconSize, 12, 12, paint);
-            }
             using var snapshot = SKImage.FromBitmap(image);
-            using var png = snapshot.Encode(SKEncodedImageFormat.Png, 100);
-            png.SaveTo(ms);
+            if (opacity >= 1f)
+            {
+                using var png = snapshot.Encode(SKEncodedImageFormat.Png, 100);
+                png.SaveTo(ms);
+            }
+            else
+            {
+                using var surface = SKSurface.Create(new SKImageInfo(IconSize, IconSize, SKColorType.Rgba8888, SKAlphaType.Premul));
+                surface.Canvas.Clear(SKColors.Transparent);
+                var a = (byte)(255 * Math.Clamp(opacity, 0f, 1f));
+                using var paint = new SKPaint { Color = new SKColor(255, 255, 255, a) };
+                surface.Canvas.DrawImage(snapshot, 0, 0, paint);
+                using var img = surface.Snapshot();
+                using var png = img.Encode(SKEncodedImageFormat.Png, 100);
+                png.SaveTo(ms);
+            }
         }
         ms.Position = 0;
         return ms;

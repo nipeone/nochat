@@ -69,18 +69,18 @@ public partial class MainWindow : Window
             if (ChatPanel != null) ChatPanel.IsVisible = true;
 
             var senderId = vm.LastUnreadSenderId;
-            if (!string.IsNullOrEmpty(senderId))
+        if (!string.IsNullOrEmpty(senderId))
+        {
+            var item = vm.Friends.FirstOrDefault(f => f.UserInfo.Id == senderId);
+            if (item != null)
             {
-                var user = vm.Friends.FirstOrDefault(f => f.Id == senderId);
-                if (user != null)
-                {
-                    vm.SelectPrivateChat(user);
-                    if (FriendList != null) FriendList.SelectedItem = user;
-                    if (ChatTitle != null) ChatTitle.Text = user.DisplayName;
-                    if (ChatSubtitle != null) ChatSubtitle.Text = "在线";
-                    if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (user.DisplayName.Length > 0 ? char.ToUpperInvariant(user.DisplayName[0]) : '?').ToString();
-                }
+                vm.SelectPrivateChat(item.UserInfo);
+                if (FriendList != null) FriendList.SelectedItem = item;
+                if (ChatTitle != null) ChatTitle.Text = item.DisplayNameForList;
+                if (ChatSubtitle != null) ChatSubtitle.Text = "在线";
+                if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (item.DisplayNameForList.Length > 0 ? char.ToUpperInvariant(item.DisplayNameForList[0]) : '?').ToString();
             }
+        }
 
             _vm?.SetWindowVisible(true);
             Show();
@@ -239,42 +239,11 @@ public partial class MainWindow : Window
 
     private void ApplyBrushes(bool isDark)
     {
-        if (Application.Current?.Resources == null) return;
-        var r = Application.Current.Resources;
-        if (isDark)
-        {
-            r["SidebarBrush"] = new SolidColorBrush(Color.Parse("#161B26"));
-            r["ContentBrush"] = new SolidColorBrush(Color.Parse("#0F1117"));
-            r["HeaderBrush"] = new SolidColorBrush(Color.Parse("#161B26"));
-            r["BorderBrush"] = new SolidColorBrush(Color.Parse("#252B38"));
-            r["ChatAreaBrush"] = new SolidColorBrush(Color.Parse("#13161E"));
-            r["MessageReceivedBrush"] = new SolidColorBrush(Color.Parse("#2A2E38"));
-            r["MessageSentBrush"] = new SolidColorBrush(Color.Parse("#07C160"));
-        }
-        else
-        {
-            r["SidebarBrush"] = new SolidColorBrush(Color.Parse("#E8EEF5"));
-            r["ContentBrush"] = new SolidColorBrush(Color.Parse("#FFFFFF"));
-            r["HeaderBrush"] = new SolidColorBrush(Color.Parse("#F0F4F8"));
-            r["BorderBrush"] = new SolidColorBrush(Color.Parse("#D0D7DE"));
-            r["ChatAreaBrush"] = new SolidColorBrush(Color.Parse("#F0F2F5"));
-            r["MessageReceivedBrush"] = new SolidColorBrush(Color.Parse("#E4E6EB"));
-            r["MessageSentBrush"] = new SolidColorBrush(Color.Parse("#07C160"));
-        }
-        var accent = AppSettings.AccentColor switch
-        {
-            "Green" => Color.Parse("#50C878"),
-            "Purple" => Color.Parse("#9B59B6"),
-            "Orange" => Color.Parse("#E67E22"),
-            "Red" => Color.Parse("#E74C3C"),
-            "Pink" => Color.Parse("#E91E63"),
-            _ => Color.Parse("#5B8DEE")
-        };
-        r["AccentBrush"] = new SolidColorBrush(accent);
-        r["NavSelectedBrush"] = new SolidColorBrush(Color.FromArgb(0x28, accent.R, accent.G, accent.B));
+        (Application.Current as App)?.ApplyAppBrushes(isDark);
     }
 
-    private void SyncDarkModeToggle()
+    /// <summary>同步侧边栏深色模式开关与当前主题（设置页切换主题后调用）</summary>
+    public void SyncDarkModeToggle()
     {
         if (DarkModeToggle == null) return;
         var isDark = Application.Current?.RequestedThemeVariant == ThemeVariant.Dark;
@@ -384,13 +353,13 @@ public partial class MainWindow : Window
     private void OnFriendSelected(object? sender, SelectionChangedEventArgs e)
     {
         if (_vm == null || e.AddedItems.Count == 0) return;
-        if (e.AddedItems[0] is UserInfo user)
+        if (e.AddedItems[0] is FriendItemViewModel item)
         {
-            _vm.SelectPrivateChat(user);
+            _vm.SelectPrivateChat(item.UserInfo);
             (Application.Current as App)?.StopTrayBlink();
-            if (ChatTitle != null) ChatTitle.Text = user.DisplayName;
+            if (ChatTitle != null) ChatTitle.Text = item.DisplayNameForList;
             if (ChatSubtitle != null) ChatSubtitle.Text = "在线";
-            if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (user.DisplayName.Length > 0 ? char.ToUpperInvariant(user.DisplayName[0]) : '?').ToString();
+            if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (item.DisplayNameForList.Length > 0 ? char.ToUpperInvariant(item.DisplayNameForList[0]) : '?').ToString();
         }
     }
 
@@ -427,8 +396,9 @@ public partial class MainWindow : Window
     private async void OnSendFileClick(object? sender, RoutedEventArgs e)
     {
         if (_vm == null) return;
-        var friend = FriendList?.SelectedItem as UserInfo;
-        if (friend == null) return;
+        var item = FriendList?.SelectedItem as FriendItemViewModel;
+        if (item == null) return;
+        var friend = item.UserInfo;
         try
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { AllowMultiple = false, Title = "选择要发送的文件" });
@@ -455,11 +425,27 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void OnEditRemarkClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menuItem) return;
+        var ctx = menuItem.Parent as ContextMenu;
+        var target = ctx?.PlacementTarget as Control;
+        var item = target?.DataContext as FriendItemViewModel;
+        if (item == null) return;
+        var dialog = new EditRemarkWindow();
+        dialog.SetPrompt(item.UserInfo.DisplayName);
+        dialog.SetCurrentRemark(item.CurrentRemark);
+        await dialog.ShowDialog(this);
+        if (dialog.ResultRemark != null)
+            item.SetRemark(dialog.ResultRemark);
+    }
+
     private async void OnSendFolderClick(object? sender, RoutedEventArgs e)
     {
         if (_vm == null) return;
-        var friend = FriendList?.SelectedItem as UserInfo;
-        if (friend == null) return;
+        var item = FriendList?.SelectedItem as FriendItemViewModel;
+        if (item == null) return;
+        var friend = item.UserInfo;
         try
         {
             var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { AllowMultiple = false, Title = "选择要发送的文件夹" });

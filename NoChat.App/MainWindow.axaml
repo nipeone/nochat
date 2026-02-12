@@ -7,6 +7,7 @@
         Title="NoChat - 局域网聊天"
         Width="1000" Height="660"
         MinWidth="800" MinHeight="500"
+        WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="False">
     <!-- Avalonia 11.1+：样式 Setter 的 Value 若为整数，在控件分离时可能触发 Int32→Double 的 InvalidCastException（如双击导致视觉树更新），故此处使用小数形式强制为 double -->
     <Window.Styles>
@@ -14,6 +15,8 @@
             <Setter Property="CornerRadius" Value="8.0"/>
             <Setter Property="Padding" Value="16,10"/>
             <Setter Property="FontSize" Value="13.0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style Selector="TextBox">
             <Setter Property="CornerRadius" Value="8.0"/>
@@ -40,9 +43,9 @@
                     </Border>
                     <Ellipse Width="10" Height="10" Fill="#50C878" HorizontalAlignment="Center"/>
                 </StackPanel>
-                <Button x:Name="NavChats" Content="💬 聊天" Margin="8,4" HorizontalContentAlignment="Left" BorderThickness="0" Click="OnNavChats"/>
-                <Button x:Name="NavGroups" Content="👥 群组" Margin="8,4" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="OnNavGroups"/>
-                <Button x:Name="NavSettings" Content="⚙ 设置" Margin="8,4" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="OnNavSettings"/>
+                <Button x:Name="NavChats" Content="💬 聊天" Margin="8,4" FontSize="16" HorizontalContentAlignment="Center" BorderThickness="0" Click="OnNavChats"/>
+                <Button x:Name="NavGroups" Content="👥 群组" Margin="8,4" FontSize="16" HorizontalContentAlignment="Center" Background="Transparent" BorderThickness="0" Click="OnNavGroups"/>
+                <Button x:Name="NavSettings" Content="⚙ 设置" Margin="8,4" FontSize="16" HorizontalContentAlignment="Center" Background="Transparent" BorderThickness="0" Click="OnNavSettings"/>
                 <StackPanel VerticalAlignment="Bottom" Margin="8,0,8,16">
                     <TextBlock Text="深色模式" FontSize="12" Opacity="0.8" Margin="8,0"/>
                     <ToggleSwitch x:Name="DarkModeToggle" IsCheckedChanged="OnDarkModeToggled"/>
@@ -58,14 +61,19 @@
                 <ListBox Grid.Row="2" x:Name="FriendList" ItemsSource="{Binding Friends}" SelectionChanged="OnFriendSelected"
                          Margin="8,0,8,8" BorderThickness="0">
                     <ListBox.ItemTemplate>
-                        <DataTemplate DataType="models:UserInfo">
+                        <DataTemplate DataType="vm:FriendItemViewModel">
                             <Grid ColumnDefinitions="Auto,*" Margin="8,6">
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="改备注" Click="OnEditRemarkClick"/>
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
                                 <Border Width="40" Height="40" CornerRadius="20" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0">
-                                    <TextBlock Text="{Binding DisplayName, Converter={StaticResource FirstCharConverter}}" FontSize="14" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding DisplayNameForList, Converter={StaticResource FirstCharConverter}}" FontSize="14" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2.0">
                                     <StackPanel Orientation="Horizontal" Spacing="6.0">
-                                        <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="Medium"/>
+                                        <TextBlock Text="{Binding DisplayNameForList}" FontSize="14" FontWeight="Medium"/>
                                         <Ellipse Width="8" Height="8" Fill="#50C878" VerticalAlignment="Center" IsVisible="{Binding IsOnline}"/>
                                         <TextBlock Text="在线" FontSize="11" Foreground="#50C878" VerticalAlignment="Center" IsVisible="{Binding IsOnline}"/>
                                     </StackPanel>
@@ -125,11 +133,17 @@
                     </ItemsControl>
                 </ScrollViewer>
                 <Border Grid.Row="2" Background="{DynamicResource HeaderBrush}" Padding="16,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                        <TextBox Grid.Column="0" Text="{Binding InputText, Mode=TwoWay}" Watermark="输入消息..." MinHeight="40" Margin="0,0,8,0" KeyDown="OnInputKeyDown"/>
-                        <Button Grid.Column="1" Content="发送" Background="{DynamicResource AccentBrush}" Foreground="White" BorderThickness="0" Margin="0,0,8,0" Click="OnSendClick"/>
-                        <Button Grid.Column="2" Content="文件" Margin="0,0,8,0" Click="OnSendFileClick"/>
-                        <Button Grid.Column="3" Content="文件夹" Click="OnSendFolderClick"/>
+                    <Grid ColumnDefinitions="*,Auto,Auto">
+                        <TextBox Grid.Column="0" Text="{Binding InputText, Mode=TwoWay}" Watermark="输入消息，Enter 发送" MinHeight="40" Margin="0,0,8,0" KeyDown="OnInputKeyDown"/>
+                        <Button Grid.Column="1" Content="➤ 发送" Background="{DynamicResource AccentBrush}" Foreground="White" BorderThickness="0" Margin="0,0,8,0" Click="OnSendClick" MinWidth="88"/>
+                        <Button Grid.Column="2" Content="📎" ToolTip.Tip="发送文件或文件夹" MinWidth="44" MinHeight="40">
+                            <Button.Flyout>
+                                <MenuFlyout>
+                                    <MenuItem Header="发送文件" Click="OnSendFileClick"/>
+                                    <MenuItem Header="发送文件夹" Click="OnSendFolderClick"/>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
                     </Grid>
                 </Border>
             </Grid>

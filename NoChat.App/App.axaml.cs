@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using NoChat.App.Assets;
@@ -48,6 +49,7 @@ public partial class App : Application
             ThemeMode.Dark => ThemeVariant.Dark,
             _ => ThemeVariant.Default
         };
+        ApplyAppBrushes(data.ThemeMode == ThemeMode.Dark);
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -76,9 +78,9 @@ public partial class App : Application
         _mainWindow = mainWindow;
         try
         {
-            using (var s0 = IconHelper.CreateAppIconStream(false))
+            using (var s0 = IconHelper.CreateAppIconStream(1f))
                 _trayIconNormal = new WindowIcon(s0);
-            using (var s1 = IconHelper.CreateAppIconStream(true))
+            using (var s1 = IconHelper.CreateAppIconStream(0.35f))
                 _trayIconAlert = new WindowIcon(s1);
             _trayIcon = new TrayIcon
             {
@@ -153,5 +155,43 @@ public partial class App : Application
             _trayIcon.Icon = _trayIconNormal;
             _trayIcon.ToolTipText = DefaultToolTipText;
         }
+    }
+
+    /// <summary>根据深浅色模式更新应用级 SidebarBrush、ContentBrush、HeaderBrush 等，供主窗口与设置页统一使用。</summary>
+    public void ApplyAppBrushes(bool isDark)
+    {
+        if (Resources == null) return;
+        var r = Resources;
+        if (isDark)
+        {
+            r["SidebarBrush"] = new SolidColorBrush(Color.Parse("#161B26"));
+            r["ContentBrush"] = new SolidColorBrush(Color.Parse("#0F1117"));
+            r["HeaderBrush"] = new SolidColorBrush(Color.Parse("#161B26"));
+            r["BorderBrush"] = new SolidColorBrush(Color.Parse("#252B38"));
+            r["ChatAreaBrush"] = new SolidColorBrush(Color.Parse("#13161E"));
+            r["MessageReceivedBrush"] = new SolidColorBrush(Color.Parse("#2A2E38"));
+            r["MessageSentBrush"] = new SolidColorBrush(Color.Parse("#07C160"));
+        }
+        else
+        {
+            r["SidebarBrush"] = new SolidColorBrush(Color.Parse("#E8EEF5"));
+            r["ContentBrush"] = new SolidColorBrush(Color.Parse("#FFFFFF"));
+            r["HeaderBrush"] = new SolidColorBrush(Color.Parse("#F0F4F8"));
+            r["BorderBrush"] = new SolidColorBrush(Color.Parse("#D0D7DE"));
+            r["ChatAreaBrush"] = new SolidColorBrush(Color.Parse("#F0F2F5"));
+            r["MessageReceivedBrush"] = new SolidColorBrush(Color.Parse("#E4E6EB"));
+            r["MessageSentBrush"] = new SolidColorBrush(Color.Parse("#07C160"));
+        }
+        var accent = AppSettings.AccentColor switch
+        {
+            "Green" => Color.Parse("#50C878"),
+            "Purple" => Color.Parse("#9B59B6"),
+            "Orange" => Color.Parse("#E67E22"),
+            "Red" => Color.Parse("#E74C3C"),
+            "Pink" => Color.Parse("#E91E63"),
+            _ => Color.Parse("#5B8DEE")
+        };
+        r["AccentBrush"] = new SolidColorBrush(accent);
+        r["NavSelectedBrush"] = new SolidColorBrush(Color.FromArgb(0x28, accent.R, accent.G, accent.B));
     }
 }

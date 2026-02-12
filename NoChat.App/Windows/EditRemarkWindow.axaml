@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="NoChat.App.Windows.EditRemarkWindow"
+        Title="改备注"
+        Width="320" Height="160"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    <StackPanel Margin="24" Spacing="16">
+        <TextBlock x:Name="PromptText" Text="备注名：" FontSize="13"/>
+        <TextBox x:Name="RemarkBox" Watermark="输入备注，便于区分好友" MinHeight="36"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+            <Button x:Name="BtnCancel" Content="取消" Click="OnCancelClick" MinWidth="80" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+            <Button x:Name="BtnOk" Content="确定" Click="OnOkClick" MinWidth="80" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

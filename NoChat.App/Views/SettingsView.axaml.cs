@@ -1,10 +1,12 @@
 using System;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using NoChat.App.Firewall;
 using NoChat.App.Logging;
 using NoChat.App.Settings;
+using MainWindow = NoChat.App.MainWindow;
 
 namespace NoChat.App.Views;
 
@@ -73,13 +75,17 @@ public partial class SettingsView : UserControl
     private void ApplyTheme(ThemeMode mode)
     {
         AppSettings.ThemeMode = mode;
-        if (Avalonia.Application.Current == null) return;
-        Avalonia.Application.Current.RequestedThemeVariant = mode switch
+        var app = Avalonia.Application.Current;
+        if (app == null) return;
+        app.RequestedThemeVariant = mode switch
         {
             ThemeMode.Light => Avalonia.Styling.ThemeVariant.Light,
             ThemeMode.Dark => Avalonia.Styling.ThemeVariant.Dark,
             _ => Avalonia.Styling.ThemeVariant.Default
         };
+        (app as App)?.ApplyAppBrushes(mode == ThemeMode.Dark);
+        if (app.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow is MainWindow main)
+            main.SyncDarkModeToggle();
     }
 
     private void OnAccentBlue(object? sender, PointerPressedEventArgs e) => SetAccent("Blue");

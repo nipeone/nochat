@@ -32,7 +32,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     private readonly Dictionary<string, List<ChatMessage>> _groupMessages = new();
     private string _saveFolder = "";
 
-    public ObservableCollection<UserInfo> Friends { get; } = new();
+    public ObservableCollection<FriendItemViewModel> Friends { get; } = new();
     public ObservableCollection<MessageDisplayItem> CurrentMessages { get; } = new();
     public ObservableCollection<object> Sessions { get; } = new(); // 私聊 UserInfo 或 GroupSession
 
@@ -104,18 +104,19 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         Dispatcher.UIThread.Post(() =>
         {
             var existing = Friends.FirstOrDefault(f =>
-                f.IpAddress == user.IpAddress && f.ChatPort == user.ChatPort);
+                f.UserInfo.IpAddress == user.IpAddress && f.UserInfo.ChatPort == user.ChatPort);
             if (existing != null)
             {
-                var oldId = existing.Id;
-                existing.Id = user.Id;
-                existing.DisplayName = user.DisplayName;
-                existing.MachineName = user.MachineName;
-                existing.IpAddress = user.IpAddress;
-                existing.ChatPort = user.ChatPort;
-                existing.FilePort = user.FilePort;
-                existing.IsOnline = true;
-                existing.LastSeen = user.LastSeen;
+                var u = existing.UserInfo;
+                var oldId = u.Id;
+                u.Id = user.Id;
+                u.DisplayName = user.DisplayName;
+                u.MachineName = user.MachineName;
+                u.IpAddress = user.IpAddress;
+                u.ChatPort = user.ChatPort;
+                u.FilePort = user.FilePort;
+                u.IsOnline = true;
+                u.LastSeen = user.LastSeen;
                 if (oldId != user.Id)
                 {
                     if (_currentChatUserId == oldId)
@@ -131,7 +132,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
             }
             else
             {
-                Friends.Add(user);
+                Friends.Add(new FriendItemViewModel(user));
             }
             _ = _chat.EnsureConnectionAsync(user);
         });
@@ -141,11 +142,11 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     {
         Dispatcher.UIThread.Post(() =>
         {
-            var u = Friends.FirstOrDefault(f => f.Id == userId);
-            if (u != null)
+            var item = Friends.FirstOrDefault(f => f.UserInfo.Id == userId);
+            if (item != null)
             {
-                u.IsOnline = false;
-                u.LastSeen = DateTime.UtcNow;
+                item.UserInfo.IsOnline = false;
+                item.UserInfo.LastSeen = DateTime.UtcNow;
             }
         });
     }
@@ -248,8 +249,9 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         InputText = ""; // 清空输入并通知 UI
         if (_currentChatUserId != null)
         {
-            var user = Friends.FirstOrDefault(f => f.Id == _currentChatUserId);
-            if (user == null) return;
+            var item = Friends.FirstOrDefault(f => f.UserInfo.Id == _currentChatUserId);
+            if (item == null) return;
+            var user = item.UserInfo;
             try
             {
                 var msgId = await _chat.SendMessageAsync(user, text, MessageKind.Text);
@@ -276,8 +278,9 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         var msg = item.Message;
         if (msg.SenderId != _discovery.LocalUser.Id) return;
         if (msg.IsGroup) return;
-        var user = Friends.FirstOrDefault(f => f.Id == _currentChatUserId);
-        if (user == null) return;
+        var friendItem = Friends.FirstOrDefault(f => f.UserInfo.Id == _currentChatUserId);
+        if (friendItem == null) return;
+        var user = friendItem.UserInfo;
         try
         {
             await _chat.RecallMessageAsync(user, msg.Id);
