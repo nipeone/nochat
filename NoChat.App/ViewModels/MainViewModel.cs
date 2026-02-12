@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using NoChat.App.Logging;
 using NoChat.Core.Chat;
 using NoChat.Core.Discovery;
 using NoChat.Core.FileTransfer;
@@ -27,6 +28,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     private string? _currentChatGroupId;
     private readonly Dictionary<string, List<ChatMessage>> _privateMessages = new();
     private readonly Dictionary<string, List<ChatMessage>> _groupMessages = new();
+    private readonly HashSet<string> _manualHostIds = new();
     private string _saveFolder = "";
 
     public ObservableCollection<UserInfo> Friends { get; } = new();
@@ -41,12 +43,17 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     private string _displayName = "";
     public string DisplayName { get => _displayName; set { _displayName = value ?? ""; RaisePropertyChanged(); } }
 
+    private string _manualHostIp = "";
+    public string ManualHostIp { get => _manualHostIp; set { _manualHostIp = value ?? ""; RaisePropertyChanged(); } }
+
     public event Action<string>? OnError;
     public event Action<string, string, string, long, Stream>? OnReceiveFileRequest;
     public event Action<string, string, string, bool, Stream>? OnReceiveFolderRequest;
 
     public MainViewModel()
     {
+        DiscoveryService.Log = msg => AppLogger.Info("[发现] " + msg);
+
         var chatPort = 25566;
         var filePort = 25567;
         DisplayName = Environment.MachineName;
@@ -98,6 +105,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
 
     private void OnUserOffline(string userId)
     {
+        if (_manualHostIds.Contains(userId)) return;
         Dispatcher.UIThread.Post(() =>
         {
             var u = Friends.FirstOrDefault(f => f.Id == userId);
@@ -107,6 +115,40 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
                 u.LastSeen = DateTime.UtcNow;
             }
         });
+    }
+
+    /// <summary>
+    /// 手动添加主机（发现不可用时输入对方 IP，使用默认端口 25566/25567）
+    /// </summary>
+    public void AddManualHost()
+    {
+        var ip = (ManualHostIp ?? "").Trim();
+        if (string.IsNullOrEmpty(ip))
+        {
+            OnError?.Invoke("请输入要添加的主机 IP 地址");
+            return;
+        }
+        var id = "manual-" + ip;
+        if (Friends.Any(f => f.Id == id))
+        {
+            OnError?.Invoke("该主机已在列表中");
+            return;
+        }
+        var user = new UserInfo
+        {
+            Id = id,
+            DisplayName = ip,
+            MachineName = ip,
+            IpAddress = ip,
+            ChatPort = 25566,
+            FilePort = 25567,
+            IsOnline = true,
+            LastSeen = DateTime.UtcNow
+        };
+        _manualHostIds.Add(id);
+        Friends.Add(user);
+        ManualHostIp = "";
+        AppLogger.Info($"[发现] 已手动添加主机: {ip}");
     }
 
     private Task OnMessageReceived(string senderId, string senderName, ChatMessage msg)

@@ -3,13 +3,18 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using NoChat.Core.Models;
 
 namespace NoChat.Core.Chat;
 
 public sealed class ChatService : IDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+    };
     private readonly TcpListener? _listener;
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, TcpClient> _outgoingConnections = new();

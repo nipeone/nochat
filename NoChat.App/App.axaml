@@ -7,6 +7,14 @@
         <converters:BoolToAlignmentConverter x:Key="BoolToAlignmentConverter"/>
         <converters:BoolToBrushConverter x:Key="BoolToBrushConverter"/>
         <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
+        <!-- 深色默认，启动时由 App 根据设置覆盖 -->
+        <SolidColorBrush x:Key="SidebarBrush" Color="#161B26"/>
+        <SolidColorBrush x:Key="ContentBrush" Color="#0F1117"/>
+        <SolidColorBrush x:Key="HeaderBrush" Color="#161B26"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#252B38"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#5B8DEE"/>
+        <SolidColorBrush x:Key="NavSelectedBrush" Color="#285B8DEE"/>
+        <converters:FirstCharConverter x:Key="FirstCharConverter"/>
     </Application.Resources>
     <Application.Styles>
         <FluentTheme />

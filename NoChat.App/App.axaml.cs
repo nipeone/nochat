@@ -3,7 +3,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
+using Avalonia.Threading;
 using NoChat.App.Assets;
+using NoChat.App.Logging;
+using NoChat.App.Settings;
 
 namespace NoChat.App;
 
@@ -20,6 +24,25 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        try
+        {
+            Logging.AppLogger.Init();
+        }
+        catch { /* 已由 Program 初始化 */ }
+
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            AppLogger.Error("UI 线程未处理异常（可能导致程序退出）", e.Exception);
+        };
+
+        var data = AppSettings.Load();
+        RequestedThemeVariant = data.ThemeMode switch
+        {
+            ThemeMode.Light => ThemeVariant.Light,
+            ThemeMode.Dark => ThemeVariant.Dark,
+            _ => ThemeVariant.Default
+        };
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var mainWindow = new MainWindow();

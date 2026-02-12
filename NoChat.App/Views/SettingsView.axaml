@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="NoChat.App.Views.SettingsView">
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="24" MaxWidth="480">
+            <TextBlock Text="设置" FontSize="20" FontWeight="SemiBold"/>
+
+            <StackPanel Spacing="12">
+                <TextBlock Text="外观" FontSize="14" FontWeight="Medium" Opacity="0.9"/>
+                <TextBlock Text="主题模式" FontSize="13" Opacity="0.85"/>
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <RadioButton x:Name="RadioThemeSystem" Content="跟随系统" GroupName="Theme" Click="OnThemeSystem"/>
+                    <RadioButton x:Name="RadioThemeLight" Content="浅色" GroupName="Theme" Click="OnThemeLight"/>
+                    <RadioButton x:Name="RadioThemeDark" Content="深色" GroupName="Theme" Click="OnThemeDark"/>
+                </StackPanel>
+                <TextBlock Text="强调色" FontSize="13" Opacity="0.85" Margin="0,8,0,0"/>
+                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
+                    <Border Width="32" Height="32" CornerRadius="16" Background="#5B8DEE" Cursor="Hand" PointerPressed="OnAccentBlue" Tag="Blue"/>
+                    <Border Width="32" Height="32" CornerRadius="16" Background="#50C878" Cursor="Hand" PointerPressed="OnAccentGreen" Tag="Green"/>
+                    <Border Width="32" Height="32" CornerRadius="16" Background="#9B59B6" Cursor="Hand" PointerPressed="OnAccentPurple" Tag="Purple"/>
+                    <Border Width="32" Height="32" CornerRadius="16" Background="#E67E22" Cursor="Hand" PointerPressed="OnAccentOrange" Tag="Orange"/>
+                    <Border Width="32" Height="32" CornerRadius="16" Background="#E74C3C" Cursor="Hand" PointerPressed="OnAccentRed" Tag="Red"/>
+                    <Border Width="32" Height="32" CornerRadius="16" Background="#E91E63" Cursor="Hand" PointerPressed="OnAccentPink" Tag="Pink"/>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Spacing="12">
+                <TextBlock Text="常规" FontSize="14" FontWeight="Medium" Opacity="0.9"/>
+                <TextBlock Text="关闭按钮行为" FontSize="13" Opacity="0.85"/>
+                <ComboBox x:Name="CloseBehaviorCombo" Width="220" HorizontalAlignment="Left"
+                          SelectionChanged="OnCloseBehaviorChanged">
+                    <ComboBoxItem Content="每次询问"/>
+                    <ComboBoxItem Content="最小化到托盘"/>
+                    <ComboBoxItem Content="退出程序"/>
+                </ComboBox>
+                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,12,0,0">
+                    <TextBlock Text="开机启动" FontSize="13" Opacity="0.85" VerticalAlignment="Center"/>
+                    <ToggleSwitch x:Name="StartOnBootSwitch" IsCheckedChanged="OnStartOnBootChanged"/>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel x:Name="NetworkSection" Spacing="12">
+                <TextBlock Text="网络" FontSize="14" FontWeight="Medium" Opacity="0.9"/>
+                <TextBlock Text="若局域网内无法发现其他设备，可允许本程序通过 Windows 防火墙（会弹出 UAC 请求管理员权限）。" FontSize="13" Opacity="0.85" TextWrapping="Wrap" MaxWidth="400"/>
+                <Button x:Name="BtnFirewall" Content="允许 NoChat 通过 Windows 防火墙" Click="OnFirewallClick" HorizontalAlignment="Left"/>
+                <TextBlock x:Name="FirewallResult" FontSize="12" Opacity="0.8" TextWrapping="Wrap" MaxWidth="400" IsVisible="False"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

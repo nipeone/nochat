@@ -1,16 +1,26 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="NoChat.App.Windows.CloseChoiceWindow"
-        Title="关闭 NoChat"
-        Width="340" Height="160"
+        Title="关闭应用"
+        Width="400" Height="280"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
-        Background="#161B26">
-    <StackPanel Margin="24,20" Spacing="16">
-        <TextBlock Text="关闭时您希望如何操作？" FontSize="14" Foreground="#E6E9EF"/>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
-            <Button x:Name="BtnMinimizeToTray" Content="最小化到托盘" Background="#252B38" Foreground="#E6E9EF" Click="OnMinimizeToTrayClick"/>
-            <Button x:Name="BtnExit" Content="退出程序" Background="#5B8DEE" Foreground="White" Click="OnExitClick"/>
+        ExtendClientAreaToDecorationsHint="False">
+    <Grid RowDefinitions="Auto,*,Auto" Margin="28,24">
+        <StackPanel Grid.Row="0" Spacing="14">
+            <TextBlock x:Name="TitleText" Text="关闭应用" FontSize="16" FontWeight="SemiBold"/>
+            <StackPanel Spacing="10">
+                <RadioButton x:Name="RadioMinimize" Content="最小化到托盘" GroupName="Close" IsChecked="True"/>
+                <RadioButton x:Name="RadioExit" Content="退出程序" GroupName="Close"/>
+            </StackPanel>
+            <CheckBox x:Name="CheckRemember" Content="记住我的选择" IsChecked="True"/>
         </StackPanel>
-    </StackPanel>
+        <Panel Grid.Row="1"/>
+        <Border Grid.Row="2" Background="Transparent" Padding="0,16,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+                <Button x:Name="BtnCancel" Content="取消" Click="OnCancelClick" MinWidth="88" MinHeight="40"/>
+                <Button x:Name="BtnOk" Content="确定" Click="OnOkClick" MinWidth="88" MinHeight="40"/>
+            </StackPanel>
+        </Border>
+    </Grid>
 </Window>

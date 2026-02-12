@@ -3,25 +3,40 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using NoChat.Core.Models;
 
 namespace NoChat.Core.Discovery;
 
 /// <summary>
-/// 局域网好友自动发现与上线广播（UDP 子网定向广播 + 全局广播，兼容 WiFi）
+/// 局域网好友自动发现（UDP 广播 + 多播，兼容 WiFi 与部分路由器对广播的限制）
 /// </summary>
 public sealed class DiscoveryService : IDisposable
 {
     private const int DiscoveryPort = 25565;
-    private const int BroadcastIntervalMs = 3000;
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private const int MulticastPort = 25569;
+    private static readonly IPAddress MulticastAddress = IPAddress.Parse("239.255.255.251");
+    private const int BroadcastIntervalMs = 2500;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+    };
+
+    /// <summary>由 App 层注入，用于写日志（Core 不引用 App）</summary>
+    public static Action<string>? Log;
 
     private readonly UdpClient _broadcastClient = new();
     private readonly UdpClient _listenClient = new();
+    private readonly UdpClient? _multicastSendClient;
+    private readonly UdpClient? _multicastListenClient;
     private readonly List<IPEndPoint> _broadcastEndpoints = new();
+    private readonly IPEndPoint _multicastEndpoint;
     private CancellationTokenSource? _cts;
     private Task? _broadcastTask;
     private Task? _listenTask;
+    private Task? _multicastListenTask;
     private Task? _offlineCheckTask;
 
     public UserInfo LocalUser { get; }
@@ -36,8 +51,25 @@ public sealed class DiscoveryService : IDisposable
     public DiscoveryService(string displayName, int chatPort, int filePort)
     {
         _broadcastClient.EnableBroadcast = true;
+        try
+        {
+            _broadcastClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            _broadcastClient.Client.Bind(new IPEndPoint(IPAddress.Any, 0));
+        }
+        catch (Exception ex)
+        {
+            Log?.Invoke($"广播套接字绑定失败: {ex.Message}");
+        }
+
         _listenClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-        _listenClient.Client.Bind(new IPEndPoint(IPAddress.Any, DiscoveryPort));
+        try
+        {
+            _listenClient.Client.Bind(new IPEndPoint(IPAddress.Any, DiscoveryPort));
+        }
+        catch (Exception ex)
+        {
+            Log?.Invoke($"监听端口 {DiscoveryPort} 绑定失败（可能已被占用）: {ex.Message}");
+        }
 
         var hostName = Environment.MachineName;
         var localIp = GetPreferredLocalIp();
@@ -56,6 +88,34 @@ public sealed class DiscoveryService : IDisposable
         _broadcastEndpoints.Add(new IPEndPoint(IPAddress.Broadcast, DiscoveryPort));
         foreach (var broadcastIp in GetSubnetBroadcastAddresses())
             _broadcastEndpoints.Add(new IPEndPoint(broadcastIp, DiscoveryPort));
+
+        _multicastEndpoint = new IPEndPoint(MulticastAddress, MulticastPort);
+        UdpClient? mcSend = null;
+        UdpClient? mcListen = null;
+        try
+        {
+            mcSend = new UdpClient();
+            mcSend.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            mcSend.Client.Bind(new IPEndPoint(IPAddress.Any, 0));
+            mcSend.JoinMulticastGroup(MulticastAddress);
+            _multicastSendClient = mcSend;
+
+            mcListen = new UdpClient();
+            mcListen.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            mcListen.Client.Bind(new IPEndPoint(IPAddress.Any, MulticastPort));
+            mcListen.JoinMulticastGroup(MulticastAddress);
+            _multicastListenClient = mcListen;
+        }
+        catch (Exception ex)
+        {
+            Log?.Invoke($"多播初始化失败（将仅使用广播）: {ex.Message}");
+            mcSend?.Dispose();
+            mcListen?.Dispose();
+            _multicastSendClient = null;
+            _multicastListenClient = null;
+        }
+
+        Log?.Invoke($"发现服务初始化: 本机 IP={LocalUser.IpAddress}, 广播端口={DiscoveryPort}, 多播端口={MulticastPort}, 聊天={chatPort}, 文件={filePort}. 若无法发现对方请检查: 1) 同一局域网 2) 防火墙允许 UDP {DiscoveryPort}/{MulticastPort}/{chatPort}/{filePort}");
     }
 
     public void Start()
@@ -64,7 +124,10 @@ public sealed class DiscoveryService : IDisposable
         var token = _cts.Token;
         _broadcastTask = BroadcastLoop(token);
         _listenTask = ListenLoop(token);
+        if (_multicastListenClient != null)
+            _multicastListenTask = MulticastListenLoop(token);
         _offlineCheckTask = CheckOfflineLoop(token);
+        Log?.Invoke("发现服务已启动（广播+多播），正在发送与监听…");
     }
 
     public void Stop()
@@ -73,6 +136,8 @@ public sealed class DiscoveryService : IDisposable
         {
             _listenClient.Client?.Close();
             _broadcastClient.Client?.Close();
+            _multicastSendClient?.Client?.Close();
+            _multicastListenClient?.Client?.Close();
         }
         catch { /* ignore */ }
         _cts?.Cancel();
@@ -99,8 +164,53 @@ public sealed class DiscoveryService : IDisposable
             {
                 try { await _broadcastClient.SendAsync(bytes, endpoint); } catch { /* ignore */ }
             }
+            if (_multicastSendClient != null)
+            {
+                try { await _multicastSendClient.SendAsync(bytes, _multicastEndpoint); } catch { /* ignore */ }
+            }
             await Task.Delay(BroadcastIntervalMs, ct);
         }
+    }
+
+    private async Task MulticastListenLoop(CancellationToken ct)
+    {
+        if (_multicastListenClient == null) return;
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var result = await _multicastListenClient.ReceiveAsync(ct);
+                var json = Encoding.UTF8.GetString(result.Buffer);
+                ProcessReceivedPacket(json, result.RemoteEndPoint);
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex) { Log?.Invoke($"多播接收异常: {ex.Message}"); }
+        }
+    }
+
+    private void ProcessReceivedPacket(string json, IPEndPoint? remoteEndPoint)
+    {
+        var packet = JsonSerializer.Deserialize<DiscoveryPacket>(json, JsonOptions);
+        if (packet == null || string.IsNullOrEmpty(packet.UserId) || packet.UserId == LocalUser.Id)
+            return;
+
+        var remoteIp = remoteEndPoint?.Address?.ToString() ?? packet.IpAddress;
+        if (string.IsNullOrEmpty(remoteIp)) remoteIp = packet.IpAddress;
+        var user = new UserInfo
+        {
+            Id = packet.UserId,
+            DisplayName = packet.DisplayName ?? "",
+            MachineName = packet.MachineName ?? "",
+            IpAddress = remoteIp,
+            ChatPort = packet.ChatPort,
+            FilePort = packet.FilePort,
+            IsOnline = true,
+            LastSeen = DateTime.UtcNow
+        };
+
+        lock (_sync)
+            _knownUsers[user.Id] = (user, user.LastSeen);
+        UserDiscovered?.Invoke(user);
     }
 
     private async Task ListenLoop(CancellationToken ct)
@@ -111,28 +221,10 @@ public sealed class DiscoveryService : IDisposable
             {
                 var result = await _listenClient.ReceiveAsync(ct);
                 var json = Encoding.UTF8.GetString(result.Buffer);
-                var packet = JsonSerializer.Deserialize<DiscoveryPacket>(json, JsonOptions);
-                if (packet == null || packet.UserId == LocalUser.Id) continue;
-
-                var remoteIp = result.RemoteEndPoint?.Address?.ToString() ?? packet.IpAddress;
-                var user = new UserInfo
-                {
-                    Id = packet.UserId,
-                    DisplayName = packet.DisplayName,
-                    MachineName = packet.MachineName,
-                    IpAddress = remoteIp,
-                    ChatPort = packet.ChatPort,
-                    FilePort = packet.FilePort,
-                    IsOnline = true,
-                    LastSeen = DateTime.UtcNow
-                };
-
-                lock (_sync)
-                    _knownUsers[user.Id] = (user, user.LastSeen);
-                UserDiscovered?.Invoke(user);
+                ProcessReceivedPacket(json, result.RemoteEndPoint);
             }
             catch (OperationCanceledException) { break; }
-            catch (Exception) { /* ignore */ }
+            catch (Exception ex) { Log?.Invoke($"广播接收异常: {ex.Message}"); }
         }
     }
 
@@ -253,5 +345,7 @@ public sealed class DiscoveryService : IDisposable
         Stop();
         _broadcastClient.Dispose();
         _listenClient.Dispose();
+        _multicastSendClient?.Dispose();
+        _multicastListenClient?.Dispose();
     }
 }
