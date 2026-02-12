@@ -219,16 +219,17 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
             if (user == null) return;
             try
             {
-                await _chat.SendMessageAsync(user, text);
+                var msgId = await _chat.SendMessageAsync(user, text, MessageKind.Text);
                 var msg = new ChatMessage
                 {
-                    Id = Guid.NewGuid().ToString("N"),
+                    Id = msgId,
                     SenderId = _discovery.LocalUser.Id,
                     SenderName = MyName,
                     Content = text,
                     SentAt = DateTime.UtcNow,
                     SessionId = user.Id,
-                    IsGroup = false
+                    IsGroup = false,
+                    Kind = MessageKind.Text
                 };
                 GetOrAddList(_privateMessages, user.Id).Add(msg);
                 CurrentMessages.Add(new MessageDisplayItem(msg, true));
@@ -268,7 +269,8 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
                 Content = $"[文件] {fileName}",
                 SentAt = DateTime.UtcNow,
                 SessionId = user.Id,
-                IsGroup = false
+                IsGroup = false,
+                Kind = MessageKind.File
             };
             GetOrAddList(_privateMessages, user.Id).Add(msg);
             if (_currentChatUserId == user.Id)
@@ -291,7 +293,8 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
                 Content = $"[文件夹] {folderName}",
                 SentAt = DateTime.UtcNow,
                 SessionId = user.Id,
-                IsGroup = false
+                IsGroup = false,
+                Kind = MessageKind.Folder
             };
             GetOrAddList(_privateMessages, user.Id).Add(msg);
             if (_currentChatUserId == user.Id)
@@ -312,7 +315,8 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
                 Content = $"[收到文件] {fileName}",
                 SentAt = DateTime.UtcNow,
                 SessionId = senderId,
-                IsGroup = false
+                IsGroup = false,
+                Kind = MessageKind.File
             };
             GetOrAddList(_privateMessages, senderId).Add(msg);
             if (_currentChatUserId == senderId)
@@ -333,7 +337,8 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
                 Content = content,
                 SentAt = DateTime.UtcNow,
                 SessionId = senderId,
-                IsGroup = false
+                IsGroup = false,
+                Kind = MessageKind.Folder
             };
             GetOrAddList(_privateMessages, senderId).Add(msg);
             if (_currentChatUserId == senderId)

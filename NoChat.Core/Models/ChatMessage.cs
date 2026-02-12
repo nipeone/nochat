@@ -1,7 +1,9 @@
+using NoChat.Core.Chat;
+
 namespace NoChat.Core.Models;
 
 /// <summary>
-/// 聊天消息
+/// 聊天消息（文本 / 文件 / 文件夹）
 /// </summary>
 public sealed class ChatMessage
 {
@@ -13,4 +15,6 @@ public sealed class ChatMessage
     public bool IsRecalled { get; set; }
     public string? SessionId { get; set; }  // 私聊为对方UserId，群聊为 GroupId
     public bool IsGroup { get; set; }
+    /// <summary>消息种类：文本、文件、文件夹</summary>
+    public MessageKind Kind { get; set; }
 }

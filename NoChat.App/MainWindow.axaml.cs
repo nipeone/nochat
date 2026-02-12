@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Specialized;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
@@ -92,6 +93,19 @@ public partial class MainWindow : Window
         SetNavHighlight(true);
         if (UserInitial != null)
             UserInitial.Text = (_vm.MyName.Length > 0 ? char.ToUpperInvariant(_vm.MyName[0]) : 'N').ToString();
+
+        void ScrollChatToEnd()
+        {
+            if (MessageScroll != null)
+                MessageScroll.ScrollToEnd();
+        }
+        void OnCurrentMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems?.Count > 0)
+                Dispatcher.UIThread.Post(ScrollChatToEnd, DispatcherPriority.Loaded);
+        }
+        _vm.CurrentMessages.CollectionChanged += OnCurrentMessagesChanged;
+
         _vm.OnError += msg => Dispatcher.UIThread.Post(() =>
         {
             if (ChatTitle != null) ChatTitle.Text = $"错误: {msg}";

@@ -123,15 +123,22 @@ public sealed class ChatService : IDisposable
                                 : DateTime.UtcNow,
                             IsRecalled = false,
                             SessionId = packet.SessionId,
-                            IsGroup = packet.IsGroup
+                            IsGroup = packet.IsGroup,
+                            Kind = packet.MessageKind
                         };
                         if (_onMessage != null)
                             await _onMessage(remoteUserId, remoteName ?? "", msg);
                         break;
+                    case ChatPacketType.Command when remoteUserId != null && packet.MessageId != null && packet.Command == ChatCommandType.Recall:
+                        if (_onRecall != null)
+                            await _onRecall(remoteUserId, packet.MessageId);
+                        break;
+#pragma warning disable CS0618
                     case ChatPacketType.Recall when remoteUserId != null && packet.MessageId != null:
                         if (_onRecall != null)
                             await _onRecall(remoteUserId, packet.MessageId);
                         break;
+#pragma warning restore CS0618
                 }
             }
         }
@@ -142,28 +149,25 @@ public sealed class ChatService : IDisposable
     }
 
     /// <summary>
-    /// 发送私聊消息
+    /// 发送私聊消息，返回本条消息的 Id（用于撤回等命令）
     /// </summary>
-    public async Task SendMessageAsync(UserInfo toUser, string content, CancellationToken ct = default)
+    public async Task<string> SendMessageAsync(UserInfo toUser, string content, MessageKind kind = MessageKind.Text, CancellationToken ct = default)
     {
         var msgId = Guid.NewGuid().ToString("N");
-        var packet = new ChatPacket
-        {
-            Type = ChatPacketType.Hello,
-            UserId = LocalUserId,
-            DisplayName = LocalDisplayName
-        };
         var writer = await GetOrCreateConnection(toUser, ct);
         await SendPacketAsync(writer, new ChatPacket
         {
             Type = ChatPacketType.Message,
             UserId = LocalUserId,
+            DisplayName = LocalDisplayName,
             MessageId = msgId,
             Content = content,
             SessionId = toUser.Id,
             IsGroup = false,
-            SentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            SentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            MessageKind = kind
         }, ct);
+        return msgId;
     }
 
     /// <summary>
@@ -176,11 +180,13 @@ public sealed class ChatService : IDisposable
         {
             Type = ChatPacketType.Message,
             UserId = LocalUserId,
+            DisplayName = LocalDisplayName,
             MessageId = msgId,
             Content = content,
             SessionId = groupId,
             IsGroup = true,
-            SentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            SentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            MessageKind = MessageKind.Text
         };
         foreach (var user in members)
         {
@@ -197,15 +203,17 @@ public sealed class ChatService : IDisposable
     }
 
     /// <summary>
-    /// 撤回消息（通知对方）
+    /// 撤回消息（发送命令，对方收到后同步显示为已撤回）
     /// </summary>
     public async Task RecallMessageAsync(UserInfo toUser, string messageId, CancellationToken ct = default)
     {
         var writer = await GetOrCreateConnection(toUser, ct);
         await SendPacketAsync(writer, new ChatPacket
         {
-            Type = ChatPacketType.Recall,
-            MessageId = messageId
+            Type = ChatPacketType.Command,
+            UserId = LocalUserId,
+            MessageId = messageId,
+            Command = ChatCommandType.Recall
         }, ct);
     }
 
@@ -255,12 +263,17 @@ public sealed class ChatService : IDisposable
                             ? DateTimeOffset.FromUnixTimeMilliseconds(packet.SentAt.Value).UtcDateTime
                             : DateTime.UtcNow,
                         SessionId = packet.SessionId,
-                        IsGroup = packet.IsGroup
+                        IsGroup = packet.IsGroup,
+                        Kind = packet.MessageKind
                     };
                     if (_onMessage != null)
                         await _onMessage(remoteId, msg.SenderName, msg);
                 }
-                if (packet?.Type == ChatPacketType.Recall && packet.MessageId != null && _onRecall != null)
+                if (packet?.MessageId != null && _onRecall != null &&
+                    (packet.Type == ChatPacketType.Command && packet.Command == ChatCommandType.Recall
+#pragma warning disable CS0618
+                     || packet.Type == ChatPacketType.Recall))
+#pragma warning restore CS0618
                     await _onRecall(remoteId, packet.MessageId);
             }
         }
