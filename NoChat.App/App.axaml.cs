@@ -64,6 +64,7 @@ public partial class App : Application
             {
                 mainWindow.Show();
                 mainWindow.Activate();
+                mainWindow.NotifyWindowShown();
             });
         }
 
@@ -103,6 +104,7 @@ public partial class App : Application
             {
                 mainWindow.Show();
                 mainWindow.Activate();
+                mainWindow.NotifyWindowShown();
             };
             menu.Add(showItem);
             menu.Add(new NativeMenuItemSeparator());

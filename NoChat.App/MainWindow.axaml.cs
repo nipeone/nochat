@@ -45,32 +45,51 @@ public partial class MainWindow : Window
         Close();
     }
 
-    /// <summary>显示窗口并切换到未读会话（双击托盘时调用），若有未读则选中对应好友并显示消息</summary>
+    /// <summary>主窗口被显示时调用（如从托盘菜单“显示主窗口”），用于恢复“窗口可见”状态以便后续新消息能正确触发闪烁</summary>
+    public void NotifyWindowShown()
+    {
+        _vm?.SetWindowVisible(true);
+    }
+
+    /// <summary>显示窗口并切换到未读会话（双击托盘时调用），若有未读则选中对应好友并显示消息。保证在 UI 线程执行。</summary>
     public void ShowAndSelectUnreadChat()
     {
-        var vm = _vm;
-        if (vm == null)
+        Dispatcher.UIThread.Post(() =>
         {
+            var vm = _vm;
+            if (vm == null)
+            {
+                Show();
+                Activate();
+                return;
+            }
+            // 先切回聊天视图（若当前在设置页），否则右侧仍是设置、消息区不可见
+            SetNavHighlight(true);
+            if (SettingsPanel != null) { SettingsPanel.Content = null; SettingsPanel.IsVisible = false; }
+            if (ChatPanel != null) ChatPanel.IsVisible = true;
+
+            var senderId = vm.LastUnreadSenderId;
+            if (!string.IsNullOrEmpty(senderId))
+            {
+                var user = vm.Friends.FirstOrDefault(f => f.Id == senderId);
+                if (user != null)
+                {
+                    vm.SelectPrivateChat(user);
+                    if (FriendList != null) FriendList.SelectedItem = user;
+                    if (ChatTitle != null) ChatTitle.Text = user.DisplayName;
+                    if (ChatSubtitle != null) ChatSubtitle.Text = "在线";
+                    if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (user.DisplayName.Length > 0 ? char.ToUpperInvariant(user.DisplayName[0]) : '?').ToString();
+                }
+            }
+
+            _vm?.SetWindowVisible(true);
             Show();
             Activate();
-            return;
-        }
-        var senderId = vm.LastUnreadSenderId;
-        if (!string.IsNullOrEmpty(senderId))
-        {
-            var user = vm.Friends.FirstOrDefault(f => f.Id == senderId);
-            if (user != null)
-            {
-                vm.SelectPrivateChat(user);
-                if (FriendList != null) FriendList.SelectedItem = user;
-                if (ChatTitle != null) ChatTitle.Text = user.DisplayName;
-                if (ChatSubtitle != null) ChatSubtitle.Text = "在线";
-                if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (user.DisplayName.Length > 0 ? char.ToUpperInvariant(user.DisplayName[0]) : '?').ToString();
-                if (ChatPanel != null) ChatPanel.IsVisible = true;
-            }
-        }
-        Show();
-        Activate();
+
+            // 列表更新后再滚动到底部，便于看到最新消息
+            if (MessageScroll != null && vm.CurrentMessages.Count > 0)
+                Dispatcher.UIThread.Post(() => MessageScroll.ScrollToEnd(), DispatcherPriority.Loaded);
+        });
     }
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
@@ -107,7 +126,10 @@ public partial class MainWindow : Window
         if (choice == CloseChoice.Exit)
             RequestExit();
         else if (choice == CloseChoice.MinimizeToTray)
+        {
+            _vm?.SetWindowVisible(false);
             Hide();
+        }
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)

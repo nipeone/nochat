@@ -7,8 +7,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
-  <!-- AOT 发布时需关闭 COM 互操作 -->
-  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+  <!-- Trimmed/AOT 发布时关闭 COM 互操作，避免 IL2026 与单文件打包失败（开机启动快捷方式在无 COM 时会静默失败） -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true' OR '$(PublishTrimmed)' == 'true'">
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
   </PropertyGroup>
   <!-- AOT/Trim 时保留反射用类型 -->

@@ -27,6 +27,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     private string? _currentChatUserId;
     private string? _currentChatGroupId;
     private string? _lastUnreadSenderId;
+    private bool _isWindowVisible = true;
     private readonly Dictionary<string, List<ChatMessage>> _privateMessages = new();
     private readonly Dictionary<string, List<ChatMessage>> _groupMessages = new();
     private string _saveFolder = "";
@@ -84,6 +85,9 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     }
 
     public void SetSaveFolder(string path) => _saveFolder = path;
+
+    /// <summary>主窗口显示/隐藏时由 MainWindow 调用，用于在最小化到托盘时仍将新消息视为未读并闪烁</summary>
+    public void SetWindowVisible(bool visible) => _isWindowVisible = visible;
 
     private static List<ChatMessage> GetOrAddList(Dictionary<string, List<ChatMessage>> dict, string key)
     {
@@ -150,15 +154,23 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     {
         Dispatcher.UIThread.Post(() =>
         {
+            // 私聊按发送者 Id 存（对方发来的会话）；群聊按 SessionId。协议里私聊 SessionId 为接收方 Id，不能用作本机会话 key
             var list = msg.IsGroup
                 ? GetOrAddList(_groupMessages, msg.SessionId ?? "")
-                : GetOrAddList(_privateMessages, msg.SessionId ?? senderId);
+                : GetOrAddList(_privateMessages, senderId);
             list.Add(msg);
             var isCurrentChat = (msg.IsGroup && _currentChatGroupId == msg.SessionId) ||
                 (!msg.IsGroup && _currentChatUserId == senderId);
             if (isCurrentChat)
             {
                 CurrentMessages.Add(new MessageDisplayItem(msg, false));
+                // 窗口最小化到托盘时，当前会话的新消息也视为未读，需要闪烁提醒
+                if (!_isWindowVisible)
+                {
+                    _lastUnreadSenderId = senderId;
+                    var preview = msg.Content?.Length > 50 ? msg.Content.Substring(0, 50) + "…" : (msg.Content ?? "");
+                    OnUnreadMessage?.Invoke(senderId, senderName, preview);
+                }
             }
             else
             {
