@@ -1,0 +1,125 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:NoChat.App.ViewModels;assembly=NoChat.App"
+        xmlns:models="clr-namespace:NoChat.Core.Models;assembly=NoChat.Core"
+        x:Class="NoChat.App.MainWindow"
+        Title="NoChat - 局域网聊天"
+        Width="1000" Height="660"
+        MinWidth="720" MinHeight="440"
+        ExtendClientAreaToDecorationsHint="False">
+    <Window.Styles>
+        <!-- 全局：圆角按钮、输入框 -->
+        <Style Selector="Button">
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16,10"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style Selector="Button:pointerover">
+            <Setter Property="Opacity" Value="0.92"/>
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style Selector="ListBox">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#1E2433"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="#2A3250"/>
+        </Style>
+    </Window.Styles>
+
+    <Panel Background="#0F1117">
+        <Grid x:Name="MainGrid" RowDefinitions="Auto,*" ColumnDefinitions="36,244,*">
+            <!-- 顶栏：Logo + 标题 + 主题 -->
+            <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Background="#161B26" Padding="16,12" BorderThickness="0,0,0,1" BorderBrush="#252B38">
+                <Grid ColumnDefinitions="Auto,*" Margin="0,0,12,0">
+                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                        <Border Width="36" Height="36" CornerRadius="10" Background="#5B8DEE" VerticalAlignment="Center">
+                            <TextBlock Text="N" FontSize="20" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center" Spacing="0">
+                            <TextBlock Text="NoChat" FontSize="18" FontWeight="Bold" Foreground="#E6E9EF"/>
+                            <TextBlock Text="局域网聊天" FontSize="12" Foreground="#7A8194" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <Button Grid.Column="1" x:Name="ThemeToggle" Content="🌓 切换主题" HorizontalAlignment="Right" VerticalAlignment="Center" Click="OnThemeToggle"/>
+                </Grid>
+            </Border>
+
+            <!-- 左侧：折叠条 + 好友列表 -->
+            <Border Grid.Row="1" Grid.Column="0" Background="#161B26" BorderThickness="0,0,1,0" BorderBrush="#252B38" Padding="0">
+                <Button x:Name="FriendListToggleBtn" Content="◀" ToolTip.Tip="收起好友列表" FontSize="12" Width="36" Height="36" Padding="0" Margin="0" Background="Transparent" Foreground="#7A8194" BorderThickness="0" Click="OnFriendListToggleClick"/>
+            </Border>
+            <Border x:Name="FriendListPanel" Grid.Row="1" Grid.Column="1" Background="#161B26" BorderThickness="0,0,1,0" BorderBrush="#252B38" Padding="0,8,0,0">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" Text="好友" FontSize="13" FontWeight="SemiBold" Foreground="#7A8194" Margin="16,8,16,12"/>
+                    <ListBox Grid.Row="1" x:Name="FriendList" ItemsSource="{Binding Friends}"
+                             SelectionChanged="OnFriendSelected"
+                             Margin="8,0,8,8"
+                             BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="models:UserInfo">
+                                <Grid ColumnDefinitions="Auto,*" Margin="4,2">
+                                    <Panel Width="10" Height="10" Margin="0,0,10,0" VerticalAlignment="Center">
+                                        <Ellipse Width="10" Height="10" Fill="#50C878" IsVisible="{Binding IsOnline}"/>
+                                        <Ellipse Width="10" Height="10" Fill="#5A6070" IsVisible="{Binding IsOnline, Converter={StaticResource InverseBoolConverter}}"/>
+                                    </Panel>
+                                    <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2">
+                                        <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="Medium" Foreground="#E6E9EF"/>
+                                        <TextBlock Text="{Binding MachineName}" FontSize="12" Foreground="#7A8194"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- 右侧：聊天区 -->
+            <Grid Grid.Row="1" Grid.Column="2" RowDefinitions="Auto,*,Auto" Background="#0F1117">
+                <Border Grid.Row="0" Background="#161B26" Padding="16,12" BorderThickness="0,0,0,1" BorderBrush="#252B38">
+                    <TextBlock x:Name="ChatTitle" Text="选择一位好友开始聊天" Foreground="#7A8194" FontSize="14"/>
+                </Border>
+
+                <ScrollViewer Grid.Row="1" x:Name="MessageScroll" VerticalScrollBarVisibility="Auto" Margin="16,12">
+                    <ItemsControl x:Name="MessageList" ItemsSource="{Binding CurrentMessages}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:MessageDisplayItem">
+                                <Border Margin="0,6" Padding="14,10" CornerRadius="12" MaxWidth="420"
+                                        HorizontalAlignment="{Binding IsFromMe, Converter={StaticResource BoolToAlignmentConverter}}"
+                                        Background="{Binding IsFromMe, Converter={StaticResource BoolToBrushConverter}}">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding Message.SenderName}" FontSize="12" Opacity="0.85" Margin="0,0,0,2"/>
+                                        <TextBlock Text="{Binding Message.Content}" TextWrapping="Wrap" FontSize="14" LineHeight="20"/>
+                                        <TextBlock Text="{Binding Message.SentAt, StringFormat='{}{0:HH:mm}'}" FontSize="11" Opacity="0.65" HorizontalAlignment="Right"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <Border Grid.Row="2" Background="#161B26" Padding="16,12" BorderThickness="0,1,0,0" BorderBrush="#252B38">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                        <TextBox Grid.Column="0" Text="{Binding InputText, Mode=TwoWay}" Watermark="输入消息..."
+                                 MinHeight="40" VerticalContentAlignment="Center" Margin="0,0,8,0"
+                                 Background="#1E2433" Foreground="#E6E9EF" BorderBrush="#252B38" BorderThickness="1"
+                                 KeyDown="OnInputKeyDown"/>
+                        <Button Grid.Column="1" Content="发送" Background="#5B8DEE" Foreground="White" BorderThickness="0" Margin="0,0,8,0" Click="OnSendClick"/>
+                        <Button Grid.Column="2" Content="文件" Background="#252B38" Foreground="#E6E9EF" Margin="0,0,8,0" Click="OnSendFileClick"/>
+                        <Button Grid.Column="3" Content="文件夹" Background="#252B38" Foreground="#E6E9EF" Click="OnSendFolderClick"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Panel>
+</Window>

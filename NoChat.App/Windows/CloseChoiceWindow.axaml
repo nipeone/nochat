@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="NoChat.App.Windows.CloseChoiceWindow"
+        Title="关闭 NoChat"
+        Width="340" Height="160"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="#161B26">
+    <StackPanel Margin="24,20" Spacing="16">
+        <TextBlock Text="关闭时您希望如何操作？" FontSize="14" Foreground="#E6E9EF"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+            <Button x:Name="BtnMinimizeToTray" Content="最小化到托盘" Background="#252B38" Foreground="#E6E9EF" Click="OnMinimizeToTrayClick"/>
+            <Button x:Name="BtnExit" Content="退出程序" Background="#5B8DEE" Foreground="White" Click="OnExitClick"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

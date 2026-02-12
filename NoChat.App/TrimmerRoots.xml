@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<linker>
+  <assembly fullname="NoChat.App" preserve="all"/>
+  <assembly fullname="NoChat.Core" preserve="all"/>
+  <assembly fullname="Avalonia.Themes.Fluent" preserve="all"/>
+  <assembly fullname="Avalonia.Markup.Xaml" preserve="all"/>
+</linker>
