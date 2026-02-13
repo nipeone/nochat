@@ -372,18 +372,33 @@ public partial class MainWindow : Window
         }
     }
 
+    private static MessageDisplayItem? GetMessageItemFromSender(object? sender)
+    {
+        if (sender is MenuItem menuItem)
+        {
+            var ctx = menuItem.Parent as ContextMenu;
+            var target = ctx?.PlacementTarget as Control;
+            return target?.DataContext as MessageDisplayItem;
+        }
+        if (sender is Button btn)
+            return btn.DataContext as MessageDisplayItem;
+        return null;
+    }
+
+    private async void OnCopyMessageClick(object? sender, RoutedEventArgs e)
+    {
+        var item = GetMessageItemFromSender(sender);
+        var content = item?.Message?.Content;
+        if (string.IsNullOrEmpty(content)) return;
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.Clipboard != null)
+            await topLevel.Clipboard.SetTextAsync(content);
+    }
+
     private async void OnRecallMessageClick(object? sender, RoutedEventArgs e)
     {
         if (_vm == null) return;
-        MessageDisplayItem? item = null;
-        if (sender is Avalonia.Controls.MenuItem menuItem)
-        {
-            var ctx = menuItem.Parent as Avalonia.Controls.ContextMenu;
-            var target = ctx?.PlacementTarget as Avalonia.Controls.Control;
-            item = target?.DataContext as MessageDisplayItem;
-        }
-        else if (sender is Avalonia.Controls.Button btn)
-            item = btn.DataContext as MessageDisplayItem;
+        var item = GetMessageItemFromSender(sender);
         if (item != null)
             await _vm.RecallMessageAsync(item);
     }

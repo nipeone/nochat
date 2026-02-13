@@ -112,6 +112,7 @@
                                         BorderThickness="0">
                                     <Border.ContextMenu>
                                         <ContextMenu>
+                                            <MenuItem Header="复制" Click="OnCopyMessageClick"/>
                                             <MenuItem Header="撤回" Click="OnRecallMessageClick" IsVisible="{Binding CanRecall}"/>
                                         </ContextMenu>
                                     </Border.ContextMenu>
@@ -121,8 +122,8 @@
                                             <Button Content="撤回" Click="OnRecallMessageClick" IsVisible="{Binding CanRecall}"
                                                     Padding="6,2" FontSize="11" Background="Transparent" BorderThickness="0" Foreground="#888"/>
                                         </StackPanel>
-                                        <TextBlock Text="{Binding Message.Content}" TextWrapping="Wrap" FontSize="14"
-                                                   IsVisible="{Binding Message.IsRecalled, Converter={StaticResource InverseBoolConverter}}"/>
+                                        <SelectableTextBlock Text="{Binding Message.Content}" TextWrapping="Wrap" FontSize="14"
+                                                             IsVisible="{Binding Message.IsRecalled, Converter={StaticResource InverseBoolConverter}}"/>
                                         <TextBlock Text="已撤回" FontSize="13" FontStyle="Italic" Opacity="0.7"
                                                    IsVisible="{Binding Message.IsRecalled}"/>
                                         <TextBlock Text="{Binding Message.SentAt, Converter={StaticResource DateTimeToLocalStringConverter}}" FontSize="11" Opacity="0.65" HorizontalAlignment="Right"/>
