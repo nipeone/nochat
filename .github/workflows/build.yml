@@ -15,6 +15,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set version from tag
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -26,6 +32,7 @@ jobs:
             -c Release \
             -r linux-x64 \
             --self-contained true \
+            -p:Version=${{ env.VERSION }} \
             -p:PublishTrimmed=true \
             -p:TrimMode=partial \
             -p:PublishSingleFile=true \
@@ -147,6 +154,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set version from tag
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -158,6 +171,7 @@ jobs:
             -c Release `
             -r ${{ matrix.platform }} `
             --self-contained true `
+            -p:Version=${{ env.VERSION }} `
             -p:PublishTrimmed=true `
             -p:TrimMode=partial `
             -p:PublishSingleFile=true `
@@ -185,6 +199,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set version from tag
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -196,6 +216,7 @@ jobs:
             -c Release \
             -r ${{ matrix.platform }} \
             --self-contained true \
+            -p:Version=${{ env.VERSION }} \
             -p:PublishTrimmed=true \
             -p:TrimMode=partial \
             -p:PublishSingleFile=true \
