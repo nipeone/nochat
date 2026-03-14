@@ -189,6 +189,12 @@ jobs:
         with:
           path: ./artifacts
 
+      - name: Clean up artifacts
+        run: |
+          # 删除 pdb 和 logo.svg
+          find ./artifacts -name "*.pdb" -delete
+          find ./artifacts -name "logo.svg" -delete
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -198,10 +204,10 @@ jobs:
           prerelease: false
           files: |
             ./artifacts/NoChat-deb/*.deb
-            ./artifacts/NoChat-linux-x64/**
-            ./artifacts/NoChat-win-x64/**
-            ./artifacts/NoChat-win-arm64/**
-            ./artifacts/NoChat-macos-x64/**
-            ./artifacts/NoChat-macos-arm64/**
+            ./artifacts/NoChat-linux-x64/NoChat.App
+            ./artifacts/NoChat-win-x64/NoChat.App.exe
+            ./artifacts/NoChat-win-arm64/NoChat.App.exe
+            ./artifacts/NoChat-macos-x64/NoChat.App
+            ./artifacts/NoChat-macos-arm64/NoChat.App
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
