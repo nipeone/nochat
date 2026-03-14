@@ -50,7 +50,7 @@ jobs:
         run: |
           VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
 
-          cat > ./dist/DEBIAN/control << EOF
+          cat > ./dist/DEBIAN/control <<-EOF
 Package: nochat
 Version: $VERSION
 Architecture: amd64
