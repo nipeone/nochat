@@ -79,11 +79,30 @@ jobs:
 
       - name: Create maintenance scripts
         run: |
-          echo "#!/bin/sh" > ./dist/DEBIAN/postinst
-          echo "set -e" >> ./dist/DEBIAN/postinst
-          echo "chmod +x /usr/lib/nochat/NoChat" >> ./dist/DEBIAN/postinst
-          echo "update-desktop-database /usr/share/applications || true" >> ./dist/DEBIAN/postinst
-          echo "gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true" >> ./dist/DEBIAN/postinst
+          printf '#!/bin/sh\n' > ./dist/DEBIAN/postinst
+          printf 'set -e\n' >> ./dist/DEBIAN/postinst
+          printf 'chmod +x /usr/lib/nochat/NoChat\n' >> ./dist/DEBIAN/postinst
+          printf 'update-desktop-database /usr/share/applications 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf 'gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '\n' >> ./dist/DEBIAN/postinst
+          printf '# 自动配置防火墙规则（NoChat 需要）\n' >> ./dist/DEBIAN/postinst
+          printf 'configure_firewall() {\n' >> ./dist/DEBIAN/postinst
+          printf '  if command -v ufw >/dev/null 2>&1; then\n' >> ./dist/DEBIAN/postinst
+          printf '    ufw allow 25565/udp 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '    ufw allow 25569/udp 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '    ufw allow 25566/tcp 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '    ufw allow 25567/tcp 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '  fi\n' >> ./dist/DEBIAN/postinst
+          printf '  if command -v firewall-cmd >/dev/null 2>&1; then\n' >> ./dist/DEBIAN/postinst
+          printf '    firewall-cmd --permanent --add-port=25565/udp 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '    firewall-cmd --permanent --add-port=25569/udp 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '    firewall-cmd --permanent --add-port=25566/tcp 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '    firewall-cmd --permanent --add-port=25567/tcp 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '    firewall-cmd --reload 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
+          printf '  fi\n' >> ./dist/DEBIAN/postinst
+          printf '}\n' >> ./dist/DEBIAN/postinst
+          printf '\n' >> ./dist/DEBIAN/postinst
+          printf 'configure_firewall 2>/dev/null || true\n' >> ./dist/DEBIAN/postinst
 
           echo "#!/bin/sh" > ./dist/DEBIAN/prerm
           echo "set -e" >> ./dist/DEBIAN/prerm
