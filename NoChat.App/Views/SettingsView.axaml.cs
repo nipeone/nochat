@@ -9,6 +9,7 @@ using NoChat.App.Firewall;
 using NoChat.App.Logging;
 using NoChat.App.Settings;
 using NoChat.App.Update;
+using NoChat.App.ViewModels;
 using MainWindow = NoChat.App.MainWindow;
 
 namespace NoChat.App.Views;
