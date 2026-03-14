@@ -102,7 +102,7 @@ jobs:
 
   # Linux RPM
   build-rpm:
-    runs-on: fedora-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -110,6 +110,11 @@ jobs:
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
+
+      - name: Install RPM tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
         with:
           dotnet-version: '8.0'
 
@@ -149,7 +154,6 @@ jobs:
 
       - name: Build RPM package
         run: |
-          sudo dnf install -y rpmdevtools rpmlint
           rpmbuild -bb ./rpmbuild/SPECS/nochat.spec
 
       - name: Find RPM file
