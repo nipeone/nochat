@@ -47,8 +47,8 @@
 
             <StackPanel x:Name="NetworkSection" Spacing="12">
                 <TextBlock Text="网络" FontSize="14" FontWeight="Medium" Opacity="0.9"/>
-                <TextBlock Text="若局域网内无法发现其他设备，可允许本程序通过 Windows 防火墙（会弹出 UAC 请求管理员权限）。" FontSize="13" Opacity="0.85" TextWrapping="Wrap" MaxWidth="400"/>
-                <Button x:Name="BtnFirewall" Content="允许 NoChat 通过 Windows 防火墙" Click="OnFirewallClick" HorizontalAlignment="Left"/>
+                <TextBlock Text="若局域网内无法发现其他设备，可允许本程序通过防火墙（会请求管理员权限）。" FontSize="13" Opacity="0.85" TextWrapping="Wrap" MaxWidth="400"/>
+                <Button x:Name="BtnFirewall" Content="允许 NoChat 通过防火墙" Click="OnFirewallClick" HorizontalAlignment="Left"/>
                 <TextBlock x:Name="FirewallResult" FontSize="12" Opacity="0.8" TextWrapping="Wrap" MaxWidth="400" IsVisible="False"/>
             </StackPanel>
 

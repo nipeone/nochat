@@ -12,6 +12,9 @@ using NoChat.App.Update;
 using NoChat.App.ViewModels;
 using MainWindow = NoChat.App.MainWindow;
 
+using IsWindows = NoChat.App.Firewall.WindowsFirewallHelper;
+using IsLinux = NoChat.App.Firewall.LinuxFirewallHelper;
+
 namespace NoChat.App.Views;
 
 public partial class SettingsView : UserControl
@@ -29,7 +32,7 @@ public partial class SettingsView : UserControl
             {
                 LoadFromSettings();
                 if (NetworkSection != null)
-                    NetworkSection.IsVisible = WindowsFirewallHelper.IsWindows;
+                    NetworkSection.IsVisible = IsWindows.IsWindows || IsLinux.IsLinux;
 
                 // 加载版本信息
                 if (CurrentVersionText != null)
@@ -46,7 +49,24 @@ public partial class SettingsView : UserControl
     private void OnFirewallClick(object? sender, RoutedEventArgs e)
     {
         if (BtnFirewall != null) BtnFirewall.IsEnabled = false;
-        var ok = WindowsFirewallHelper.TryAddFirewallRules(out var msg);
+
+        bool ok;
+        string msg;
+
+        if (IsWindows.IsWindows)
+        {
+            ok = WindowsFirewallHelper.TryAddFirewallRules(out msg);
+        }
+        else if (IsLinux.IsLinux)
+        {
+            ok = LinuxFirewallHelper.TryAddFirewallRules(out msg);
+        }
+        else
+        {
+            msg = "当前系统不支持自动配置防火墙";
+            ok = false;
+        }
+
         if (FirewallResult != null)
         {
             FirewallResult.Text = msg;
