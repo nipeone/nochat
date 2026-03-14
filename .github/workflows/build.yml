@@ -86,9 +86,7 @@ jobs:
       - name: Build DEB package
         run: |
           sudo chown -R root:root ./dist
-          REF_NAME="${{ github.ref_name }}"
-          VERSION=$(echo ${REF_NAME#v} | grep -E '^[0-9]' || echo "0.1.0")
-          dpkg-deb --build ./dist "nochat_${VERSION}_amd64.deb"
+          dpkg-deb --build ./dist "nochat_amd64.deb"
 
       - name: Upload DEB artifact
         uses: actions/upload-artifact@v4
