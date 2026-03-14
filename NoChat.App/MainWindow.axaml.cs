@@ -365,6 +365,7 @@ public partial class MainWindow : Window
         if (e.AddedItems[0] is FriendItemViewModel item)
         {
             _vm.SelectPrivateChat(item.UserInfo);
+            item.ClearUnread(); // 清除未读计数
             (Application.Current as App)?.StopTrayBlink();
             if (ChatTitle != null) ChatTitle.Text = item.DisplayNameForList;
             if (ChatSubtitle != null) ChatSubtitle.Text = "在线";

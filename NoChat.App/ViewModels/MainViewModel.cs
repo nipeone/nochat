@@ -175,6 +175,12 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
             }
             else
             {
+                // 增加未读计数
+                var friend = Friends.FirstOrDefault(f => f.UserInfo.Id == senderId);
+                if (friend != null)
+                {
+                    friend.UnreadCount++;
+                }
                 _lastUnreadSenderId = senderId;
                 var preview = msg.Content?.Length > 50 ? msg.Content.Substring(0, 50) + "…" : (msg.Content ?? "");
                 OnUnreadMessage?.Invoke(senderId, senderName, preview);

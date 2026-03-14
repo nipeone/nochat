@@ -89,6 +89,9 @@
                                         <TextBlock Text="{Binding DisplayNameForList}" FontSize="14" FontWeight="Medium"/>
                                         <Ellipse Width="8" Height="8" Fill="#50C878" VerticalAlignment="Center" IsVisible="{Binding IsOnline}"/>
                                         <TextBlock Text="在线" FontSize="11" Foreground="#50C878" VerticalAlignment="Center" IsVisible="{Binding IsOnline}"/>
+                                        <Border Background="#FF4444" CornerRadius="10" MinWidth="20" Height="20" Padding="6,0" VerticalAlignment="Center" IsVisible="{Binding HasUnread}">
+                                            <TextBlock Text="{Binding UnreadCount}" FontSize="11" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
                                     </StackPanel>
                                     <TextBlock Text="{Binding MachineName}" FontSize="12" Opacity="0.7"/>
                                 </StackPanel>

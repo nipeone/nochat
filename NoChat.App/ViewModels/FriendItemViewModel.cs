@@ -15,6 +15,20 @@ public sealed class FriendItemViewModel : INotifyPropertyChanged
 
     public UserInfo UserInfo { get; }
 
+    private int _unreadCount;
+    public int UnreadCount
+    {
+        get => _unreadCount;
+        set
+        {
+            _unreadCount = value;
+            Raise();
+            Raise(nameof(HasUnread));
+        }
+    }
+
+    public bool HasUnread => _unreadCount > 0;
+
     public FriendItemViewModel(UserInfo userInfo)
     {
         UserInfo = userInfo;
@@ -25,6 +39,11 @@ public sealed class FriendItemViewModel : INotifyPropertyChanged
             if (e.PropertyName == nameof(UserInfo.IsOnline))
                 Raise(nameof(IsOnline));
         };
+    }
+
+    public void ClearUnread()
+    {
+        UnreadCount = 0;
     }
 
     /// <summary>列表显示名：备注优先，否则为对方 DisplayName。</summary>
