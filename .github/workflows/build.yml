@@ -133,13 +133,13 @@ jobs:
 
       - name: Prepare RPM structure
         run: |
-          mkdir -p ./rpmbuild/BUILDROOT
+          mkdir -p ./rpmbuild/BUILDROOT/nochat-1.0.0
           mkdir -p ./rpmbuild/RPMS
           mkdir -p ./rpmbuild/SOURCES
           mkdir -p ./rpmbuild/SPECS
           mkdir -p ./rpmbuild/SRPMS
 
-          # 复制发布文件到 BUILD 目录（rpmbuild 会在这里查找源码）
+          # 复制发布文件到 BUILDROOT 目录
           cp -r ./publish/linux/* ./rpmbuild/BUILDROOT/nochat-1.0.0/
           cp ./NoChat.App/logo.svg ./rpmbuild/BUILDROOT/nochat-1.0.0/ 2>/dev/null || true
 
