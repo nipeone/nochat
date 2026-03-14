@@ -85,6 +85,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         catch { /* ignore */ }
     }
 
+#if WINDOWS
     private static void CreateShortcut(string shortcutPath, string targetPath)
     {
         try
@@ -96,4 +97,5 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
         catch { /* ignore */ }
     }
+#endif
 }
