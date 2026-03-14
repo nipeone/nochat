@@ -68,6 +68,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     {
         try
         {
+#if WINDOWS
             if (OperatingSystem.IsWindows())
             {
                 var startupFolder = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
@@ -81,6 +82,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
                 else if (File.Exists(shortcut))
                     File.Delete(shortcut);
             }
+#endif
         }
         catch { /* ignore */ }
     }
