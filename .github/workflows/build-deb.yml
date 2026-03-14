@@ -34,29 +34,42 @@ jobs:
 
       - name: Prepare DEB structure
         run: |
-          # 创建目录结构
+          # 1. 创建符合 Linux 层级结构的目录
           mkdir -p ./dist/DEBIAN
-          mkdir -p ./dist/usr/bin/nochat
+          # 建议将二进制文件放在 /usr/lib/nochat，然后在 /usr/bin 创建软链接
+          mkdir -p ./dist/usr/lib/nochat
+          mkdir -p ./dist/usr/bin
           mkdir -p ./dist/usr/share/applications
           mkdir -p ./dist/usr/share/icons/hicolor/256x256/apps
 
-          # 复制发布文件
-          cp -r ./publish/linux/* ./dist/usr/bin/nochat/
+          # 2. 复制发布文件并确保可执行权限
+          cp -r ./publish/linux/* ./dist/usr/lib/nochat/
+          chmod +x ./dist/usr/lib/nochat/NoChat.App
+          
+          # 创建软链接到 /usr/bin，方便用户命令行输入 nochat 启动
+          ln -s /usr/lib/nochat/NoChat.App ./dist/usr/bin/nochat
 
-          # 创建桌面图标
-          cp ./NoChat.App/logo.svg ./dist/usr/share/icons/hicolor/256x256/apps/nochat.svg 2>/dev/null || true
+          # 3. 复制图标
+          if [ -f "./NoChat.App/logo.svg" ]; then
+            cp ./NoChat.App/logo.svg ./dist/usr/share/icons/hicolor/256x256/apps/nochat.svg
+          fi
 
       - name: Create DEBIAN/control
         run: |
-          VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
+          # 处理版本号：如果是手动触发则默认为 0.1.0
+          REF_NAME="${{ github.ref_name }}"
+          VERSION=$(echo ${REF_NAME#v} | grep -E '^[0-9]' || echo "0.1.0")
 
-          cat > ./dist/DEBIAN/control <<-EOF
+          cat > ./dist/DEBIAN/control <<EOF
 Package: nochat
 Version: $VERSION
+Section: utils
+Priority: optional
 Architecture: amd64
-Depends: libgtk-3-0, libgbm1, libnss3, libasound2
-Maintainer: NoChat Team
+Depends: libgtk-3-0, libgbm1, libnss3, libasound2, libc6
+Maintainer: NoChat Team <support@example.com>
 Description: A cross-platform chat application
+ Built via GitHub Actions.
 EOF
 
       - name: Create desktop entry
@@ -65,7 +78,7 @@ EOF
 [Desktop Entry]
 Name=NoChat
 Comment=A cross-platform chat application
-Exec=/usr/bin/nochat/NoChat.App
+Exec=/usr/bin/nochat
 Icon=nochat
 Terminal=false
 Type=Application
@@ -73,36 +86,40 @@ Categories=Network;InstantMessaging;
 StartupWMClass=NoChat
 EOF
 
-      - name: Create postinst script
+      - name: Create postinst & prerm scripts
         run: |
+          # postinst: 安装后运行
           cat > ./dist/DEBIAN/postinst << 'EOF'
-#!/bin/bash
-# 更新桌面数据库
-update-desktop-database /usr/share/applications 2>/dev/null || true
-# 刷新图标缓存
-gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+#!/bin/sh
+set -e
+chmod +x /usr/lib/nochat/NoChat.App
+update-desktop-database /usr/share/applications || true
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
 EOF
-          chmod +x ./dist/DEBIAN/postinst
-
-      - name: Create prerm script
-        run: |
+          # prerm: 卸载前运行
           cat > ./dist/DEBIAN/prerm << 'EOF'
-#!/bin/bash
-# 清理桌面数据库
-update-desktop-database /usr/share/applications 2>/dev/null || true
+#!/bin/sh
+set -e
 EOF
-          chmod +x ./dist/DEBIAN/prerm
+          # 必须修正权限，DEBIAN 目录下的脚本必须是 755
+          chmod 755 ./dist/DEBIAN/postinst ./dist/DEBIAN/prerm
 
       - name: Build DEB package
         run: |
-          VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
-          dpkg-deb --build ./dist ./NoChat_${VERSION}_amd64.deb
+          # 关键修复：修正所有者为 root，否则 dpkg 会报错或警告
+          sudo chown -R root:root ./dist
+          
+          REF_NAME="${{ github.ref_name }}"
+          VERSION=$(echo ${REF_NAME#v} | grep -E '^[0-9]' || echo "0.1.0")
+          
+          # 打包
+          dpkg-deb --build ./dist ./nochat_${VERSION}_amd64.deb
 
       - name: Upload DEB artifact
         uses: actions/upload-artifact@v4
         with:
           name: NoChat-deb
-          path: ./NoChat_*.deb
+          path: ./*.deb
 
       - name: Upload source archive
         uses: actions/upload-artifact@v4
