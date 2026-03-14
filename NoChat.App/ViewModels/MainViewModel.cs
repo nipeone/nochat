@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using NoChat.App.Logging;
+using NoChat.App.Settings;
 using NoChat.Core.Chat;
 using NoChat.Core.Discovery;
 using NoChat.Core.FileTransfer;
@@ -30,9 +31,11 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     private bool _isWindowVisible = true;
     private readonly Dictionary<string, List<ChatMessage>> _privateMessages = new();
     private readonly Dictionary<string, List<ChatMessage>> _groupMessages = new();
+    private readonly Dictionary<string, GroupSession> _groupSessions = new();
     private string _saveFolder = "";
 
     public ObservableCollection<FriendItemViewModel> Friends { get; } = new();
+    public ObservableCollection<GroupItemViewModel> Groups { get; } = new();
     public ObservableCollection<MessageDisplayItem> CurrentMessages { get; } = new();
     public ObservableCollection<object> Sessions { get; } = new(); // 私聊 UserInfo 或 GroupSession
 
@@ -82,9 +85,105 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         _discovery.Start();
         _chat.Start();
         _fileTransfer.Start();
+
+        // 延迟加载数据，等好友列表加载完成后再匹配成员
+        Dispatcher.UIThread.Post(LoadData);
     }
 
     public void SetSaveFolder(string path) => _saveFolder = path;
+
+    /// <summary>加载保存的数据（群组、聊天记录）</summary>
+    public void LoadData()
+    {
+        try
+        {
+            var data = AppDataService.Load();
+
+            // 加载群组（成员需要通过在线用户匹配）
+            foreach (var g in data.Groups)
+            {
+                var group = new GroupSession(g.Id, g.Name)
+                {
+                    CreatedAt = g.CreatedAt
+                };
+                // 尝试从已发现的用户中匹配成员
+                foreach (var friend in Friends)
+                {
+                    if (g.MemberIds.Contains(friend.UserInfo.Id))
+                    {
+                        group.Members.Add(friend.UserInfo);
+                    }
+                }
+                if (group.Members.Count > 0)
+                {
+                    _groupSessions[group.Id] = group;
+                    Groups.Add(new GroupItemViewModel(group));
+                }
+            }
+
+            // 加载私聊消息
+            foreach (var kvp in data.PrivateMessages)
+            {
+                var list = kvp.Value.Select(d => AppDataService.ToChatMessage(d)).ToList();
+                _privateMessages[kvp.Key] = list;
+            }
+
+            // 加载群聊消息
+            foreach (var kvp in data.GroupMessages)
+            {
+                var list = kvp.Value.Select(d => AppDataService.ToChatMessage(d)).ToList();
+                _groupMessages[kvp.Key] = list;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("LoadData 失败", ex);
+        }
+    }
+
+    /// <summary>保存数据（群组、聊天记录）</summary>
+    public void SaveData()
+    {
+        try
+        {
+            AppDataService.SaveGroups(_groupSessions.Values);
+            AppDataService.SavePrivateMessages(_privateMessages);
+            AppDataService.SaveGroupMessages(_groupMessages);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("SaveData 失败", ex);
+        }
+    }
+
+    /// <summary>创建群组</summary>
+    public void CreateGroup(string groupName, IEnumerable<UserInfo> members)
+    {
+        var groupId = Guid.NewGuid().ToString("N");
+        var group = new GroupSession(groupId, groupName);
+        foreach (var member in members)
+        {
+            group.Members.Add(member);
+        }
+        _groupSessions[groupId] = group;
+        var groupItem = new GroupItemViewModel(group);
+        Groups.Add(groupItem);
+        SaveData();
+    }
+
+    /// <summary>选择群组聊天</summary>
+    public void SelectGroupChat(GroupSession group)
+    {
+        _currentChatGroupId = group.Id;
+        _currentChatUserId = null;
+        CurrentMessages.Clear();
+        var list = _groupMessages.TryGetValue(group.Id, out var lst) ? lst : null;
+        if (list != null)
+            foreach (var m in list)
+                CurrentMessages.Add(new MessageDisplayItem(m, m.SenderId == _discovery.LocalUser.Id));
+        group.ClearUnread();
+        OnSessionViewed?.Invoke();
+    }
 
     /// <summary>主窗口显示/隐藏时由 MainWindow 调用，用于在最小化到托盘时仍将新消息视为未读并闪烁</summary>
     public void SetWindowVisible(bool visible) => _isWindowVisible = visible;
@@ -176,15 +275,28 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
             else
             {
                 // 增加未读计数
-                var friend = Friends.FirstOrDefault(f => f.UserInfo.Id == senderId);
-                if (friend != null)
+                if (!msg.IsGroup)
                 {
-                    friend.UnreadCount++;
+                    var friend = Friends.FirstOrDefault(f => f.UserInfo.Id == senderId);
+                    if (friend != null)
+                    {
+                        friend.UnreadCount++;
+                    }
+                }
+                else
+                {
+                    // 群消息：增加对应群组的未读计数
+                    var group = Groups.FirstOrDefault(g => g.Group.Id == msg.SessionId);
+                    if (group != null)
+                    {
+                        group.Group.UnreadCount++;
+                    }
                 }
                 _lastUnreadSenderId = senderId;
                 var preview = msg.Content?.Length > 50 ? msg.Content.Substring(0, 50) + "…" : (msg.Content ?? "");
                 OnUnreadMessage?.Invoke(senderId, senderName, preview);
             }
+            SaveData();
         });
         return Task.CompletedTask;
     }
@@ -253,6 +365,8 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         if (string.IsNullOrWhiteSpace(InputText)) return;
         var text = InputText;
         InputText = ""; // 清空输入并通知 UI
+
+        // 私聊
         if (_currentChatUserId != null)
         {
             var item = Friends.FirstOrDefault(f => f.UserInfo.Id == _currentChatUserId);
@@ -277,6 +391,32 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
             }
             catch (Exception ex) { OnError?.Invoke(ex.Message); }
         }
+        // 群聊
+        else if (_currentChatGroupId != null)
+        {
+            var group = _groupSessions.GetValueOrDefault(_currentChatGroupId);
+            if (group == null || group.Members.Count == 0) return;
+            try
+            {
+                var msgId = Guid.NewGuid().ToString("N");
+                await _chat.SendGroupMessageAsync(_currentChatGroupId, group.Members, text);
+                var msg = new ChatMessage
+                {
+                    Id = msgId,
+                    SenderId = _discovery.LocalUser.Id,
+                    SenderName = MyName,
+                    Content = text,
+                    SentAt = DateTime.UtcNow,
+                    SessionId = _currentChatGroupId,
+                    IsGroup = true,
+                    Kind = MessageKind.Text
+                };
+                GetOrAddList(_groupMessages, _currentChatGroupId).Add(msg);
+                CurrentMessages.Add(new MessageDisplayItem(msg, true));
+            }
+            catch (Exception ex) { OnError?.Invoke(ex.Message); }
+        }
+        SaveData();
     }
 
     public async Task RecallMessageAsync(MessageDisplayItem item)
@@ -390,6 +530,7 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
 
     public void Dispose()
     {
+        SaveData();
         _discovery.Dispose();
         _chat.Dispose();
         _fileTransfer.Dispose();

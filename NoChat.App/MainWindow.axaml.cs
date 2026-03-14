@@ -65,7 +65,7 @@ public partial class MainWindow : Window
                 return;
             }
             // 先切回聊天视图（若当前在设置页），否则右侧仍是设置、消息区不可见
-            SetNavHighlight(true);
+            SetNavHighlight();
             if (SettingsPanel != null) { SettingsPanel.Content = null; SettingsPanel.IsVisible = false; }
             if (ChatPanel != null) ChatPanel.IsVisible = true;
 
@@ -148,7 +148,7 @@ public partial class MainWindow : Window
         _vm = new MainViewModel();
         _vm.DisplayName = Environment.MachineName;
         DataContext = _vm;
-        SetNavHighlight(true);
+        SetNavHighlight();
         if (UserInitial != null)
             UserInitial.Text = (_vm.MyName.Length > 0 ? char.ToUpperInvariant(_vm.MyName[0]) : 'N').ToString();
 
@@ -272,16 +272,18 @@ public partial class MainWindow : Window
             Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
         }
         ApplyBrushes(Application.Current!.RequestedThemeVariant == ThemeVariant.Dark);
-        SetNavHighlight(SettingsPanel?.IsVisible != true);
+        SetNavHighlight();
     }
 
-    private void SetNavHighlight(bool chatsActive)
+    private void SetNavHighlight()
     {
         var brush = Application.Current?.Resources["NavSelectedBrush"] as Avalonia.Media.IBrush;
-        if (NavChats != null) NavChats.Background = chatsActive ? brush : null;
-        if (NavSettings != null) NavSettings.Background = !chatsActive ? brush : null;
-        if (NavGroups != null) NavGroups.Background = null;
+        var isOnSettings = SettingsPanel?.IsVisible == true;
+        if (NavChats != null) NavChats.Background = !isOnSettings ? brush : null; // 聊天/群组视图都高亮聊天按钮
+        if (NavSettings != null) NavSettings.Background = isOnSettings ? brush : null;
+        if (NavGroups != null) NavGroups.Background = null; // 群组按钮不高亮，保持默认
     }
+
 
     private void OnNavChats(object? sender, RoutedEventArgs e)
     {
@@ -289,7 +291,8 @@ public partial class MainWindow : Window
         _navBusy = true;
         try
         {
-            SetNavHighlight(true);
+            SetNavHighlight();
+            ShowFriendList();
             if (ChatPanel != null) ChatPanel.IsVisible = true;
             if (SettingsPanel != null) { SettingsPanel.Content = null; SettingsPanel.IsVisible = false; }
         }
@@ -309,7 +312,8 @@ public partial class MainWindow : Window
         _navBusy = true;
         try
         {
-            SetNavHighlight(true);
+            SetNavHighlight();
+            ShowGroupList();
             if (ChatPanel != null) ChatPanel.IsVisible = true;
             if (SettingsPanel != null) { SettingsPanel.Content = null; SettingsPanel.IsVisible = false; }
         }
@@ -323,13 +327,29 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ShowFriendList()
+    {
+        if (ListTitle != null) ListTitle.Text = "LAN 用户";
+        if (FriendList != null) FriendList.IsVisible = true;
+        if (GroupList != null) GroupList.IsVisible = false;
+        if (BtnCreateGroup != null) BtnCreateGroup.IsVisible = false;
+    }
+
+    private void ShowGroupList()
+    {
+        if (ListTitle != null) ListTitle.Text = "我的群组";
+        if (FriendList != null) FriendList.IsVisible = false;
+        if (GroupList != null) GroupList.IsVisible = true;
+        if (BtnCreateGroup != null) BtnCreateGroup.IsVisible = true;
+    }
+
     private void OnNavSettings(object? sender, RoutedEventArgs e)
     {
         if (_navBusy) return;
         _navBusy = true;
         try
         {
-            SetNavHighlight(false);
+            SetNavHighlight();
             if (ChatPanel != null) ChatPanel.IsVisible = false;
             if (SettingsPanel != null)
             {
@@ -371,6 +391,94 @@ public partial class MainWindow : Window
             if (ChatSubtitle != null) ChatSubtitle.Text = "在线";
             if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (item.DisplayNameForList.Length > 0 ? char.ToUpperInvariant(item.DisplayNameForList[0]) : '?').ToString();
         }
+    }
+
+    private void OnGroupSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_vm == null || e.AddedItems.Count == 0) return;
+        if (e.AddedItems[0] is GroupItemViewModel item)
+        {
+            _vm.SelectGroupChat(item.Group);
+            (Application.Current as App)?.StopTrayBlink();
+            if (ChatTitle != null) ChatTitle.Text = item.GroupName;
+            if (ChatSubtitle != null) ChatSubtitle.Text = $"{item.MemberCount}人";
+            if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (item.GroupName.Length > 0 ? char.ToUpperInvariant(item.GroupName[0]) : '?').ToString();
+        }
+    }
+
+    private async void OnCreateGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm == null || _vm.Friends.Count == 0) return;
+
+        // 简单实现：弹出对话框输入群名称，然后选择成员
+        var dialog = new Window
+        {
+            Title = "创建群组",
+            Width = 400,
+            Height = 340,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false
+        };
+
+        var panel = new StackPanel { Margin = new Thickness(16), Spacing = 12 };
+        panel.Children.Add(new TextBlock { Text = "群名称：" });
+        var nameBox = new TextBox { Watermark = "请输入群名称" };
+        panel.Children.Add(nameBox);
+
+        panel.Children.Add(new TextBlock { Text = "选择成员（至少1人）：", Margin = new Thickness(0, 8, 0, 0) });
+
+        // 显示好友列表供选择
+        var friendListPanel = new StackPanel();
+        foreach (var friend in _vm.Friends)
+        {
+            var cb = new CheckBox { Content = friend.DisplayNameForList, Tag = friend.UserInfo };
+            friendListPanel.Children.Add(cb);
+        }
+        var scrollViewer = new ScrollViewer { Content = friendListPanel, Height = 120 };
+        panel.Children.Add(scrollViewer);
+
+        var errorText = new TextBlock { Text = "", FontSize = 12, Foreground = Brushes.Red, IsVisible = false };
+        panel.Children.Add(errorText);
+
+        var buttonPanel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right };
+        var okButton = new Button { Content = "创建", Padding = new Thickness(16, 8) };
+        var cancelButton = new Button { Content = "取消", Padding = new Thickness(16, 8) };
+        buttonPanel.Children.Add(okButton);
+        buttonPanel.Children.Add(cancelButton);
+        panel.Children.Add(buttonPanel);
+
+        dialog.Content = panel;
+
+        okButton.Click += (_, _) =>
+        {
+            var selectedMembers = new List<UserInfo>();
+            foreach (var child in friendListPanel.Children)
+            {
+                if (child is CheckBox cb && cb.IsChecked == true && cb.Tag is UserInfo user)
+                {
+                    selectedMembers.Add(user);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(nameBox.Text))
+            {
+                errorText.Text = "请输入群名称";
+                errorText.IsVisible = true;
+                return;
+            }
+            if (selectedMembers.Count == 0)
+            {
+                errorText.Text = "请至少选择一位成员";
+                errorText.IsVisible = true;
+                return;
+            }
+
+            _vm.CreateGroup(nameBox.Text, selectedMembers);
+            dialog.Close();
+        };
+        cancelButton.Click += (_, _) => dialog.Close();
+
+        await dialog.ShowDialog(this);
     }
 
     private static MessageDisplayItem? GetMessageItemFromSender(object? sender)

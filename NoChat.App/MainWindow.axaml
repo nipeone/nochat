@@ -66,12 +66,16 @@
             </Grid>
         </Border>
 
-        <!-- 中间：LAN Users -->
+        <!-- 中间：LAN Users / Groups -->
         <Border Grid.Column="1" Background="{DynamicResource ContentBrush}" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource BorderBrush}">
-            <Grid RowDefinitions="Auto,Auto,*">
-                <TextBlock Grid.Row="0" Text="LAN 用户" FontSize="16" FontWeight="SemiBold" Margin="16,16,16,8"/>
+            <Grid x:Name="ListPanel" RowDefinitions="Auto,Auto,*">
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,16,16,8">
+                    <TextBlock x:Name="ListTitle" Text="LAN 用户" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <Button x:Name="BtnCreateGroup" Content="+建群" Padding="8,4" Margin="12,0,0,0" FontSize="12" Click="OnCreateGroupClick" IsVisible="False"/>
+                </StackPanel>
                 <TextBox Grid.Row="1" x:Name="SearchBox" Watermark="搜索..." Margin="12,0,12,12" MinHeight="36"/>
-                <ListBox Grid.Row="2" x:Name="FriendList" ItemsSource="{Binding Friends}" SelectionChanged="OnFriendSelected"
+                <!-- 好友列表 -->
+                <ListBox x:Name="FriendList" Grid.Row="2" ItemsSource="{Binding Friends}" SelectionChanged="OnFriendSelected"
                          Margin="8,0,8,8" BorderThickness="0">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="vm:FriendItemViewModel">
@@ -94,6 +98,28 @@
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="{Binding MachineName}" FontSize="12" Opacity="0.7"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <!-- 群组列表 -->
+                <ListBox x:Name="GroupList" Grid.Row="2" ItemsSource="{Binding Groups}" SelectionChanged="OnGroupSelected"
+                         Margin="8,0,8,8" BorderThickness="0" IsVisible="False">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:GroupItemViewModel">
+                            <Grid ColumnDefinitions="Auto,*" Margin="8,6">
+                                <Border Width="40" Height="40" CornerRadius="20" Background="#7B68EE" Margin="0,0,12,0">
+                                    <TextBlock Text="{Binding GroupName, Converter={StaticResource FirstCharConverter}}" FontSize="14" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2.0">
+                                    <StackPanel Orientation="Horizontal" Spacing="6.0">
+                                        <TextBlock Text="{Binding GroupName}" FontSize="14" FontWeight="Medium"/>
+                                        <TextBlock Text="{Binding MemberCount, StringFormat='({0}人)'}" FontSize="12" Opacity="0.7" VerticalAlignment="Center"/>
+                                        <Border Background="#FF4444" CornerRadius="10" MinWidth="20" Height="20" Padding="6,0" VerticalAlignment="Center" IsVisible="{Binding HasUnread}">
+                                            <TextBlock Text="{Binding UnreadCount}" FontSize="11" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </StackPanel>
                                 </StackPanel>
                             </Grid>
                         </DataTemplate>
