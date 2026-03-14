@@ -135,30 +135,23 @@ jobs:
         run: |
           mkdir -p ./rpmbuild/BUILDROOT
           mkdir -p ./rpmbuild/RPMS
-          mkdir -p ./rpmbuild/SOURCES
           mkdir -p ./rpmbuild/SPECS
-          mkdir -p ./rpmbuild/SRPMS
 
-          # 复制发布文件到 SOURCES 目录，然后创建 tarball
-          mkdir -p ./rpmbuild/SOURCES/nochat-1.0.0
-          cp -r ./publish/linux/* ./rpmbuild/SOURCES/nochat-1.0.0/
-          cp ./NoChat.App/logo.svg ./rpmbuild/SOURCES/nochat-1.0.0/ 2>/dev/null || true
-          cd ./rpmbuild/SOURCES
-          tar -czvf ../SOURCES/nochat-1.0.0.tar.gz nochat-1.0.0
-          cd ../..
-          rm -rf ./rpmbuild/SOURCES/nochat-1.0.0
+          # 复制发布文件到 BUILDROOT
+          cp -r ./publish/linux/* ./rpmbuild/BUILDROOT/
 
       - name: Create SPEC file
         run: |
-          printf 'Name:           nochat\nVersion:        1.0.0\nRelease:        1\nSummary:        A cross-platform chat application\nLicense:        MIT\nURL:            https://github.com/nipeone/nochat\nBuildArch:      x86_64\nRequires:       gtk3, libgbm, nss, alsa-lib, glibc\nSource0:        nochat-1.0.0.tar.gz\n\n' > ./rpmbuild/SPECS/nochat.spec
+          printf 'Name:           nochat\nVersion:        1.0.0\nRelease:        1\nSummary:        A cross-platform chat application\nLicense:        MIT\nURL:            https://github.com/nipeone/nochat\nBuildArch:      x86_64\nRequires:       gtk3, libgbm, nss, alsa-lib, glibc\n\n' > ./rpmbuild/SPECS/nochat.spec
 
           printf '%%description\nNoChat - A cross-platform chat application\n\n' >> ./rpmbuild/SPECS/nochat.spec
-          printf '%%install\nmkdir -p %%{buildroot}/usr/lib/nochat\nmkdir -p %%{buildroot}/usr/bin\ncp -r ./* %%{buildroot}/usr/lib/nochat/\nchmod +x %%{buildroot}/usr/lib/nochat/NoChat\nln -sf /usr/lib/nochat/NoChat %%{buildroot}/usr/bin/nochat\n\n' >> ./rpmbuild/SPECS/nochat.spec
+          # 使用 _buildrootdir 指向我们自己的构建目录
+          printf '%%install\nmkdir -p %%{buildroot}/usr/lib/nochat\nmkdir -p %%{buildroot}/usr/bin\ncp -r /home/runner/work/nochat/nochat/publish/linux/* %%{buildroot}/usr/lib/nochat/\nchmod +x %%{buildroot}/usr/lib/nochat/NoChat\nln -sf /usr/lib/nochat/NoChat %%{buildroot}/usr/bin/nochat\n\n' >> ./rpmbuild/SPECS/nochat.spec
           printf '%%files\n/usr/lib/nochat/*\n/usr/bin/nochat\n' >> ./rpmbuild/SPECS/nochat.spec
 
       - name: Build RPM package
         run: |
-          rpmbuild -bb ./rpmbuild/SPECS/nochat.spec
+          rpmbuild -bb --define "_buildrootdir /home/runner/work/nochat/nochat/rpmbuild/BUILDROOT" ./rpmbuild/SPECS/nochat.spec
 
       - name: Find RPM file
         run: |
