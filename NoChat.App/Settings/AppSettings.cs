@@ -66,6 +66,24 @@ public static class AppSettings
         set { var s = Load(); s.SavedCloseChoice = value; Save(s); }
     }
 
+    public static bool CheckUpdateOnStartup
+    {
+        get => Load().CheckUpdateOnStartup;
+        set { var s = Load(); s.CheckUpdateOnStartup = value; Save(s); }
+    }
+
+    public static bool AutoCheckUpdate
+    {
+        get => Load().AutoCheckUpdate;
+        set { var s = Load(); s.AutoCheckUpdate = value; Save(s); }
+    }
+
+    public static string? LastCheckedVersion
+    {
+        get => Load().LastCheckedVersion;
+        set { var s = Load(); s.LastCheckedVersion = value; Save(s); }
+    }
+
     /// <summary>
     /// 保存关闭时的用户选择（勾选“记住我的选择”时调用），同时写入 CloseBehavior 与 SavedCloseChoice，启动时优先用 CloseBehavior。
     /// </summary>
@@ -151,4 +169,13 @@ public class AppSettingsData
 
     [JsonPropertyName("savedCloseChoice")]
     public CloseChoice? SavedCloseChoice { get; set; }
+
+    [JsonPropertyName("checkUpdateOnStartup")]
+    public bool CheckUpdateOnStartup { get; set; } = true;
+
+    [JsonPropertyName("autoCheckUpdate")]
+    public bool AutoCheckUpdate { get; set; } = true;
+
+    [JsonPropertyName("lastCheckedVersion")]
+    public string? LastCheckedVersion { get; set; }
 }

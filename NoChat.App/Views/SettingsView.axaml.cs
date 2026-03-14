@@ -1,27 +1,38 @@
 using System;
+using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using NoChat.App.Firewall;
 using NoChat.App.Logging;
 using NoChat.App.Settings;
+using NoChat.App.Update;
 using MainWindow = NoChat.App.MainWindow;
 
 namespace NoChat.App.Views;
 
 public partial class SettingsView : UserControl
 {
+    private SettingsViewModel? _viewModel;
+
     public SettingsView()
     {
         try
         {
             InitializeComponent();
+            _viewModel = new SettingsViewModel();
+            DataContext = _viewModel;
             Loaded += (s, e) =>
             {
                 LoadFromSettings();
                 if (NetworkSection != null)
                     NetworkSection.IsVisible = WindowsFirewallHelper.IsWindows;
+
+                // 加载版本信息
+                if (CurrentVersionText != null)
+                    CurrentVersionText.Text = $"v{_viewModel.CurrentVersion}";
             };
         }
         catch (Exception ex)
@@ -61,6 +72,10 @@ public partial class SettingsView : UserControl
                 };
             if (StartOnBootSwitch != null)
                 StartOnBootSwitch.IsChecked = data.StartOnBoot;
+            if (CheckUpdateOnStartupSwitch != null)
+                CheckUpdateOnStartupSwitch.IsChecked = data.CheckUpdateOnStartup;
+            if (AutoCheckUpdateSwitch != null)
+                AutoCheckUpdateSwitch.IsChecked = data.AutoCheckUpdate;
         }
         catch (Exception ex)
         {
@@ -123,5 +138,45 @@ public partial class SettingsView : UserControl
     {
         if (StartOnBootSwitch?.IsChecked is bool b)
             AppSettings.StartOnBoot = b;
+    }
+
+    private void OnCheckUpdateOnStartupChanged(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (CheckUpdateOnStartupSwitch?.IsChecked is bool b)
+            AppSettings.CheckUpdateOnStartup = b;
+    }
+
+    private void OnAutoCheckUpdateChanged(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (AutoCheckUpdateSwitch?.IsChecked is bool b)
+            AppSettings.AutoCheckUpdate = b;
+    }
+
+    private async void OnCheckUpdateClick(object? sender, RoutedEventArgs e)
+    {
+        if (_viewModel == null) return;
+
+        if (BtnCheckUpdate != null)
+            BtnCheckUpdate.IsEnabled = false;
+
+        try
+        {
+            await _viewModel.CheckForUpdateAsync();
+
+            if (UpdateStatusText != null)
+                UpdateStatusText.Text = _viewModel.UpdateStatus;
+
+            // 如果有更新，显示下载选项
+            if (_viewModel.HasUpdate && !string.IsNullOrEmpty(_viewModel.DownloadUrl))
+            {
+                UpdateStatusText.Text = $"{_viewModel.UpdateStatus}，点击打开下载页面";
+                UpdateStatusText.Text += $" ({_viewModel.LatestVersion})";
+            }
+        }
+        finally
+        {
+            if (BtnCheckUpdate != null)
+                BtnCheckUpdate.IsEnabled = true;
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -9,6 +10,7 @@ using Avalonia.Threading;
 using NoChat.App.Assets;
 using NoChat.App.Logging;
 using NoChat.App.Settings;
+using NoChat.App.Update;
 
 namespace NoChat.App;
 
@@ -50,6 +52,9 @@ public partial class App : Application
             _ => ThemeVariant.Default
         };
         ApplyAppBrushes(data.ThemeMode == ThemeMode.Dark);
+
+        // 启动时检查更新
+        _ = CheckForUpdateOnStartupAsync(data);
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -193,5 +198,34 @@ public partial class App : Application
         };
         r["AccentBrush"] = new SolidColorBrush(accent);
         r["NavSelectedBrush"] = new SolidColorBrush(Color.FromArgb(0x28, accent.R, accent.G, accent.B));
+    }
+
+    private async Task CheckForUpdateOnStartupAsync(AppSettingsData data)
+    {
+        // 如果关闭了启动检查更新，则不检查
+        if (!data.CheckUpdateOnStartup && !data.AutoCheckUpdate)
+            return;
+
+        try
+        {
+            await Task.Delay(3000); // 延迟3秒检查，避免影响启动速度
+
+            var result = await UpdateService.CheckForUpdateAsync();
+
+            if (result.HasUpdate)
+            {
+                AppLogger.Info($"[更新] 启动时发现新版本: v{result.LatestVersion}");
+
+                // 显示托盘通知
+                ShowTrayNotification("NoChat", $"发现新版本 v{result.LatestVersion}，请前往设置检查更新");
+
+                // 保存最后检查的版本
+                AppSettings.LastCheckedVersion = result.LatestVersion;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("[更新] 启动时检查更新异常", ex);
+        }
     }
 }
