@@ -110,13 +110,13 @@ jobs:
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
 
       - name: Install RPM tools
         run: |
           sudo apt-get update
           sudo apt-get install -y rpm
-        with:
-          dotnet-version: '8.0'
 
       - name: Publish Linux
         run: |
