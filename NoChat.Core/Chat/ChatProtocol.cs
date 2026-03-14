@@ -25,7 +25,13 @@ public enum MessageKind
 /// <summary>命令类型：撤回等，可扩展</summary>
 public enum ChatCommandType
 {
-    Recall
+    Recall,
+    /// <summary>创建/加入群组</summary>
+    GroupCreate,
+    /// <summary>退出群组</summary>
+    GroupLeave,
+    /// <summary>解散群组（仅群主）</summary>
+    GroupDisband
 }
 
 public sealed class ChatPacket
@@ -61,4 +67,12 @@ public sealed class ChatPacket
     /// <summary>命令类型（仅当 type=Command 时有效），如 Recall</summary>
     [JsonPropertyName("command")]
     public ChatCommandType? Command { get; set; }
+
+    /// <summary>群名称（用于 GroupCreate 命令）</summary>
+    [JsonPropertyName("groupName")]
+    public string? GroupName { get; set; }
+
+    /// <summary>成员ID列表（用于 GroupCreate 命令）</summary>
+    [JsonPropertyName("memberIds")]
+    public List<string>? MemberIds { get; set; }
 }

@@ -23,6 +23,9 @@ public sealed class ChatService : IDisposable
     private Task? _acceptTask;
     private Func<string, string, ChatMessage, Task>? _onMessage;
     private Func<string, string, Task>? _onRecall;
+    private Func<string, string, string, List<string>, Task>? _onGroupCreate;
+    private Func<string, string, Task>? _onGroupLeave;
+    private Func<string, string, Task>? _onGroupDisband;
 
     public int ListenPort { get; }
     public string LocalUserId { get; }
@@ -41,6 +44,15 @@ public sealed class ChatService : IDisposable
 
     public void SetRecallHandler(Func<string, string, Task> onRecall)
         => _onRecall = onRecall;
+
+    public void SetGroupCreateHandler(Func<string, string, string, List<string>, Task> onGroupCreate)
+        => _onGroupCreate = onGroupCreate;
+
+    public void SetGroupLeaveHandler(Func<string, string, Task> onGroupLeave)
+        => _onGroupLeave = onGroupLeave;
+
+    public void SetGroupDisbandHandler(Func<string, string, Task> onGroupDisband)
+        => _onGroupDisband = onGroupDisband;
 
     /// <summary>
     /// 预先建立与对方的连接，避免首条消息发不出去（需对方先回复）的问题。
@@ -133,6 +145,21 @@ public sealed class ChatService : IDisposable
                         if (_onRecall != null)
                             await _onRecall(remoteUserId, packet.MessageId);
                         break;
+                    // 群创建/加入
+                    case ChatPacketType.Command when remoteUserId != null && packet.Command == ChatCommandType.GroupCreate && packet.SessionId != null:
+                        if (_onGroupCreate != null)
+                            await _onGroupCreate(remoteUserId, packet.GroupName ?? "", packet.SessionId, packet.MemberIds ?? new List<string>());
+                        break;
+                    // 群退出
+                    case ChatPacketType.Command when remoteUserId != null && packet.Command == ChatCommandType.GroupLeave && packet.SessionId != null:
+                        if (_onGroupLeave != null)
+                            await _onGroupLeave(remoteUserId, packet.SessionId);
+                        break;
+                    // 群解散
+                    case ChatPacketType.Command when remoteUserId != null && packet.Command == ChatCommandType.GroupDisband && packet.SessionId != null:
+                        if (_onGroupDisband != null)
+                            await _onGroupDisband(remoteUserId, packet.SessionId);
+                        break;
 #pragma warning disable CS0618
                     case ChatPacketType.Recall when remoteUserId != null && packet.MessageId != null:
                         if (_onRecall != null)
@@ -187,6 +214,81 @@ public sealed class ChatService : IDisposable
             IsGroup = true,
             SentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             MessageKind = MessageKind.Text
+        };
+        foreach (var user in members)
+        {
+            try
+            {
+                var writer = await GetOrCreateConnection(user, ct);
+                await SendPacketAsync(writer, packet, ct);
+            }
+            catch
+            {
+                // skip failed member
+            }
+        }
+    }
+
+    /// <summary>
+    /// 通知成员创建群组
+    /// </summary>
+    public async Task NotifyGroupCreatedAsync(string groupId, string groupName, IEnumerable<UserInfo> members, CancellationToken ct = default)
+    {
+        var packet = new ChatPacket
+        {
+            Type = ChatPacketType.Command,
+            UserId = LocalUserId,
+            DisplayName = LocalDisplayName,
+            MessageId = Guid.NewGuid().ToString("N"),
+            SessionId = groupId,
+            Command = ChatCommandType.GroupCreate,
+            GroupName = groupName,
+            MemberIds = members.Select(m => m.Id).ToList()
+        };
+        foreach (var user in members)
+        {
+            try
+            {
+                var writer = await GetOrCreateConnection(user, ct);
+                await SendPacketAsync(writer, packet, ct);
+            }
+            catch
+            {
+                // skip failed member
+            }
+        }
+    }
+
+    /// <summary>
+    /// 通知成员退出群组
+    /// </summary>
+    public async Task NotifyGroupLeftAsync(string groupId, UserInfo toUser, CancellationToken ct = default)
+    {
+        var writer = await GetOrCreateConnection(toUser, ct);
+        await SendPacketAsync(writer, new ChatPacket
+        {
+            Type = ChatPacketType.Command,
+            UserId = LocalUserId,
+            DisplayName = LocalDisplayName,
+            MessageId = Guid.NewGuid().ToString("N"),
+            SessionId = groupId,
+            Command = ChatCommandType.GroupLeave
+        }, ct);
+    }
+
+    /// <summary>
+    /// 通知成员解散群组
+    /// </summary>
+    public async Task NotifyGroupDisbandedAsync(string groupId, IEnumerable<UserInfo> members, CancellationToken ct = default)
+    {
+        var packet = new ChatPacket
+        {
+            Type = ChatPacketType.Command,
+            UserId = LocalUserId,
+            DisplayName = LocalDisplayName,
+            MessageId = Guid.NewGuid().ToString("N"),
+            SessionId = groupId,
+            Command = ChatCommandType.GroupDisband
         };
         foreach (var user in members)
         {

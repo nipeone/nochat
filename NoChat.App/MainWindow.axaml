@@ -109,6 +109,12 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="vm:GroupItemViewModel">
                             <Grid ColumnDefinitions="Auto,*" Margin="8,6">
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="退出群聊" Click="OnLeaveGroupClick"/>
+                                        <MenuItem Header="解散群聊" Click="OnDisbandGroupClick"/>
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
                                 <Border Width="40" Height="40" CornerRadius="20" Background="#7B68EE" Margin="0,0,12,0">
                                     <TextBlock Text="{Binding GroupName, Converter={StaticResource FirstCharConverter}}" FontSize="14" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>

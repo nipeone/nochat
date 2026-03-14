@@ -81,6 +81,9 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
         _discovery.UserOffline += OnUserOffline;
         _chat.SetMessageHandler(OnMessageReceived);
         _chat.SetRecallHandler(OnRecallReceived);
+        _chat.SetGroupCreateHandler(OnGroupCreatedReceived);
+        _chat.SetGroupLeaveHandler(OnGroupLeaveReceived);
+        _chat.SetGroupDisbandHandler(OnGroupDisbandReceived);
 
         _discovery.Start();
         _chat.Start();
@@ -161,13 +164,67 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
     {
         var groupId = Guid.NewGuid().ToString("N");
         var group = new GroupSession(groupId, groupName);
-        foreach (var member in members)
+        var memberList = members.ToList();
+        foreach (var member in memberList)
         {
             group.Members.Add(member);
         }
         _groupSessions[groupId] = group;
         var groupItem = new GroupItemViewModel(group);
         Groups.Add(groupItem);
+
+        // 通知其他成员
+        _ = _chat.NotifyGroupCreatedAsync(groupId, groupName, memberList);
+        SaveData();
+    }
+
+    /// <summary>退出群组</summary>
+    public async Task LeaveGroupAsync(GroupSession group)
+    {
+        // 通知其他成员
+        foreach (var member in group.Members)
+        {
+            if (member.Id != _discovery.LocalUser.Id)
+            {
+                await _chat.NotifyGroupLeftAsync(group.Id, member);
+            }
+        }
+
+        // 从列表中移除
+        var item = Groups.FirstOrDefault(g => g.Group.Id == group.Id);
+        if (item != null)
+        {
+            Groups.Remove(item);
+        }
+        _groupSessions.Remove(group.Id);
+
+        if (_currentChatGroupId == group.Id)
+        {
+            _currentChatGroupId = null;
+            CurrentMessages.Clear();
+        }
+        SaveData();
+    }
+
+    /// <summary>解散群组（仅群主）</summary>
+    public async Task DisbandGroupAsync(GroupSession group)
+    {
+        // 通知所有成员
+        await _chat.NotifyGroupDisbandedAsync(group.Id, group.Members);
+
+        // 从列表中移除
+        var item = Groups.FirstOrDefault(g => g.Group.Id == group.Id);
+        if (item != null)
+        {
+            Groups.Remove(item);
+        }
+        _groupSessions.Remove(group.Id);
+
+        if (_currentChatGroupId == group.Id)
+        {
+            _currentChatGroupId = null;
+            CurrentMessages.Clear();
+        }
         SaveData();
     }
 
@@ -321,6 +378,80 @@ public sealed class MainViewModel : IDisposable, INotifyPropertyChanged
                 item.Message.IsRecalled = true;
                 CurrentMessages.RemoveAt(idx);
                 CurrentMessages.Insert(idx, new MessageDisplayItem(item.Message, item.IsFromMe));
+            }
+        });
+        return Task.CompletedTask;
+    }
+
+    /// <summary>收到群创建通知</summary>
+    private Task OnGroupCreatedReceived(string creatorId, string groupName, string groupId, List<string> memberIds)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            // 检查是否已经存在
+            if (_groupSessions.ContainsKey(groupId)) return;
+
+            var group = new GroupSession(groupId, groupName);
+            // 尝试匹配成员
+            foreach (var friend in Friends)
+            {
+                if (memberIds.Contains(friend.UserInfo.Id))
+                {
+                    group.Members.Add(friend.UserInfo);
+                }
+            }
+            if (group.Members.Count > 0)
+            {
+                _groupSessions[groupId] = group;
+                Groups.Add(new GroupItemViewModel(group));
+                SaveData();
+            }
+        });
+        return Task.CompletedTask;
+    }
+
+    /// <summary>收到群退出通知</summary>
+    private Task OnGroupLeaveReceived(string fromUserId, string groupId)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_groupSessions.TryGetValue(groupId, out var group))
+            {
+                var member = group.Members.FirstOrDefault(m => m.Id == fromUserId);
+                if (member != null)
+                {
+                    group.Members.Remove(member);
+                    SaveData();
+                }
+            }
+        });
+        return Task.CompletedTask;
+    }
+
+    /// <summary>收到群解散通知</summary>
+    private Task OnGroupDisbandReceived(string fromUserId, string groupId)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_groupSessions.TryGetValue(groupId, out var group))
+            {
+                var item = Groups.FirstOrDefault(g => g.Group.Id == groupId);
+                if (item != null)
+                {
+                    Groups.Remove(item);
+                }
+                _groupSessions.Remove(groupId);
+                if (_groupMessages.ContainsKey(groupId))
+                {
+                    _groupMessages.Remove(groupId);
+                }
+                // 如果当前正在该群聊天，清空消息
+                if (_currentChatGroupId == groupId)
+                {
+                    _currentChatGroupId = null;
+                    CurrentMessages.Clear();
+                }
+                SaveData();
             }
         });
         return Task.CompletedTask;

@@ -279,10 +279,12 @@ public partial class MainWindow : Window
     {
         var brush = Application.Current?.Resources["NavSelectedBrush"] as Avalonia.Media.IBrush;
         var isOnSettings = SettingsPanel?.IsVisible == true;
-        if (NavChats != null) NavChats.Background = !isOnSettings ? brush : null; // 聊天/群组视图都高亮聊天按钮
+        if (NavChats != null) NavChats.Background = !isOnSettings && !IsOnGroupList ? brush : null;
         if (NavSettings != null) NavSettings.Background = isOnSettings ? brush : null;
-        if (NavGroups != null) NavGroups.Background = null; // 群组按钮不高亮，保持默认
+        if (NavGroups != null) NavGroups.Background = !isOnSettings && IsOnGroupList ? brush : null;
     }
+
+    private bool IsOnGroupList { get; set; }
 
 
     private void OnNavChats(object? sender, RoutedEventArgs e)
@@ -291,6 +293,7 @@ public partial class MainWindow : Window
         _navBusy = true;
         try
         {
+            IsOnGroupList = false;
             SetNavHighlight();
             ShowFriendList();
             if (ChatPanel != null) ChatPanel.IsVisible = true;
@@ -329,6 +332,7 @@ public partial class MainWindow : Window
 
     private void ShowFriendList()
     {
+        if (ListPanel != null) ListPanel.IsVisible = true;
         if (ListTitle != null) ListTitle.Text = "LAN 用户";
         if (FriendList != null) FriendList.IsVisible = true;
         if (GroupList != null) GroupList.IsVisible = false;
@@ -337,6 +341,9 @@ public partial class MainWindow : Window
 
     private void ShowGroupList()
     {
+        IsOnGroupList = true;
+        SetNavHighlight();
+        if (ListPanel != null) ListPanel.IsVisible = true;
         if (ListTitle != null) ListTitle.Text = "我的群组";
         if (FriendList != null) FriendList.IsVisible = false;
         if (GroupList != null) GroupList.IsVisible = true;
@@ -350,6 +357,8 @@ public partial class MainWindow : Window
         try
         {
             SetNavHighlight();
+            // 隐藏好友/群组列表，只显示设置
+            if (ListPanel != null) ListPanel.IsVisible = false;
             if (ChatPanel != null) ChatPanel.IsVisible = false;
             if (SettingsPanel != null)
             {
@@ -361,6 +370,7 @@ public partial class MainWindow : Window
         {
             AppLogger.Error("打开设置界面时发生错误", ex);
             if (ChatPanel != null) ChatPanel.IsVisible = true;
+            if (ListPanel != null) ListPanel.IsVisible = true;
             ShowErrorDialog($"无法打开设置：{ex.Message} 详见日志：{AppLogger.LogFilePath}");
         }
         finally
@@ -403,6 +413,36 @@ public partial class MainWindow : Window
             if (ChatTitle != null) ChatTitle.Text = item.GroupName;
             if (ChatSubtitle != null) ChatSubtitle.Text = $"{item.MemberCount}人";
             if (ChatPartnerInitial != null) ChatPartnerInitial.Text = (item.GroupName.Length > 0 ? char.ToUpperInvariant(item.GroupName[0]) : '?').ToString();
+        }
+    }
+
+    private async void OnLeaveGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm == null) return;
+        if (sender is MenuItem menuItem)
+        {
+            var ctx = menuItem.Parent as ContextMenu;
+            var target = ctx?.PlacementTarget as ContentControl;
+            var groupItem = target?.DataContext as GroupItemViewModel;
+            if (groupItem != null)
+            {
+                await _vm.LeaveGroupAsync(groupItem.Group);
+            }
+        }
+    }
+
+    private async void OnDisbandGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm == null) return;
+        if (sender is MenuItem menuItem)
+        {
+            var ctx = menuItem.Parent as ContextMenu;
+            var target = ctx?.PlacementTarget as ContentControl;
+            var groupItem = target?.DataContext as GroupItemViewModel;
+            if (groupItem != null)
+            {
+                await _vm.DisbandGroupAsync(groupItem.Group);
+            }
         }
     }
 

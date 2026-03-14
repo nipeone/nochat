@@ -107,19 +107,62 @@ public static class UpdateService
 
                 // Find the appropriate asset for current platform
                 var platformSuffix = GetPlatformSuffix();
+                var isWindows = OperatingSystem.IsWindows();
+                var isLinux = OperatingSystem.IsLinux();
+                var isMacOS = OperatingSystem.IsMacOS();
+
+                // First pass: exact platform match
                 foreach (var asset in updateInfo.Assets)
                 {
-                    if (asset.Name.Contains(platformSuffix) || asset.Name.EndsWith(".zip") || asset.Name.EndsWith(".deb") || asset.Name.EndsWith(".rpm"))
+                    if (asset.Name.Contains(platformSuffix))
                     {
                         result.DownloadUrl = asset.BrowserDownloadUrl;
+                        AppLogger.Info($"[更新] 匹配到平台安装包: {asset.Name}");
                         break;
                     }
                 }
 
-                // Fallback: use the first asset
-                if (string.IsNullOrEmpty(result.DownloadUrl) && updateInfo.Assets.Length > 0)
+                // Second pass: for macOS, also check for universal binary
+                if (string.IsNullOrEmpty(result.DownloadUrl) && isMacOS)
                 {
-                    result.DownloadUrl = updateInfo.Assets[0].BrowserDownloadUrl;
+                    foreach (var asset in updateInfo.Assets)
+                    {
+                        // macOS universal binary 或任何 macOS 包
+                        if (asset.Name.Contains("macos") || asset.Name.EndsWith(".zip") && !asset.Name.Contains("linux") && !asset.Name.Contains("win"))
+                        {
+                            result.DownloadUrl = asset.BrowserDownloadUrl;
+                            AppLogger.Info($"[更新] 回退到 macOS 安装包: {asset.Name}");
+                            break;
+                        }
+                    }
+                }
+
+                // Third pass: for Windows, check for any Windows package
+                if (string.IsNullOrEmpty(result.DownloadUrl) && isWindows)
+                {
+                    foreach (var asset in updateInfo.Assets)
+                    {
+                        if (asset.Name.Contains("win"))
+                        {
+                            result.DownloadUrl = asset.BrowserDownloadUrl;
+                            AppLogger.Info($"[更新] 回退到 Windows 安装包: {asset.Name}");
+                            break;
+                        }
+                    }
+                }
+
+                // Fourth pass: for Linux, check for any Linux package
+                if (string.IsNullOrEmpty(result.DownloadUrl) && isLinux)
+                {
+                    foreach (var asset in updateInfo.Assets)
+                    {
+                        if (asset.Name.Contains("linux"))
+                        {
+                            result.DownloadUrl = asset.BrowserDownloadUrl;
+                            AppLogger.Info($"[更新] 回退到 Linux 安装包: {asset.Name}");
+                            break;
+                        }
+                    }
                 }
 
                 AppLogger.Info($"[更新] 发现新版本: {result.LatestVersion} > {result.CurrentVersion}");
@@ -280,16 +323,38 @@ public static class UpdateService
     {
         if (OperatingSystem.IsWindows())
         {
-            return OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) && Environment.Is64BitOperatingSystem
-                ? "win-x64" : "win-x86";
+            // Windows: 检测是否是 ARM Windows
+            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
+            {
+                // 检测架构
+                var arch = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE");
+                if (arch == "ARM64")
+                    return "win-arm64";
+                return Environment.Is64BitOperatingSystem ? "win-x64" : "win-x86";
+            }
+            return Environment.Is64BitOperatingSystem ? "win-x64" : "win-x86";
         }
         if (OperatingSystem.IsLinux())
         {
+            // Linux: 检测架构
+            var arch = Environment.GetEnvironmentVariable("HOSTTYPE") ?? "";
+            if (arch.Contains("aarch64") || arch.Contains("arm64"))
+                return "linux-arm64";
             return Environment.Is64BitOperatingSystem ? "linux-x64" : "linux-x86";
         }
         if (OperatingSystem.IsMacOS())
         {
-            return Environment.Is64BitOperatingSystem ? "macos-x64" : "macos-arm64";
+            // macOS: 检测是否是 Apple Silicon (ARM)
+#if NET8_0_OR_GREATER
+            if (OperatingSystem.IsMacOSVersionAtLeast(11, 0))
+            {
+                // 使用 RuntimeInformation 来检测
+                var arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture;
+                if (arch == System.Runtime.InteropServices.Architecture.Arm64)
+                    return "macos-arm64";
+            }
+#endif
+            return "macos-x64"; // Intel 或未知架构
         }
         return "";
     }
