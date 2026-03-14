@@ -191,11 +191,20 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: Clean up artifacts
+      - name: Clean up and prepare packages
         run: |
           # 删除 pdb 和 logo.svg
           find ./artifacts -name "*.pdb" -delete
           find ./artifacts -name "logo.svg" -delete
+
+          # 打包成 zip（GitHub Release 不允许无扩展名文件）
+          cd ./artifacts
+          zip -r ../NoChat-linux-x64.zip ./NoChat-linux-x64/
+          zip -r ../NoChat-win-x64.zip ./NoChat-win-x64/
+          zip -r ../NoChat-win-arm64.zip ./NoChat-win-arm64/
+          zip -r ../NoChat-macos-x64.zip ./NoChat-macos-x64/
+          zip -r ../NoChat-macos-arm64.zip ./NoChat-macos-arm64/
+          cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -206,10 +215,10 @@ jobs:
           prerelease: false
           files: |
             ./artifacts/NoChat-deb/*.deb
-            ./artifacts/NoChat-linux-x64/NoChat
-            ./artifacts/NoChat-win-x64/NoChat.exe
-            ./artifacts/NoChat-win-arm64/NoChat.exe
-            ./artifacts/NoChat-macos-x64/NoChat
-            ./artifacts/NoChat-macos-arm64/NoChat
+            ./NoChat-linux-x64.zip
+            ./NoChat-win-x64.zip
+            ./NoChat-win-arm64.zip
+            ./NoChat-macos-x64.zip
+            ./NoChat-macos-arm64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
