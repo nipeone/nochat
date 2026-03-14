@@ -1,0 +1,111 @@
+name: Build DEB Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+
+      - name: Publish Linux
+        run: |
+          dotnet publish NoChat.App/NoChat.App.csproj \
+            -c Release \
+            -r linux-x64 \
+            --self-contained true \
+            -p:PublishTrimmed=true \
+            -p:TrimMode=partial \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:InvariantGlobalization=true \
+            -o ./publish/linux
+
+      - name: Prepare DEB structure
+        run: |
+          # 创建目录结构
+          mkdir -p ./dist/DEBIAN
+          mkdir -p ./dist/usr/bin/nochat
+          mkdir -p ./dist/usr/share/applications
+          mkdir -p ./dist/usr/share/icons/hicolor/256x256/apps
+
+          # 复制发布文件
+          cp -r ./publish/linux/* ./dist/usr/bin/nochat/
+
+          # 创建桌面图标
+          cp ./NoChat.App/logo.svg ./dist/usr/share/icons/hicolor/256x256/apps/nochat.svg 2>/dev/null || true
+
+      - name: Create DEBIAN/control
+        run: |
+          VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
+
+          cat > ./dist/DEBIAN/control << EOF
+Package: nochat
+Version: $VERSION
+Architecture: amd64
+Depends: libgtk-3-0, libgbm1, libnss3, libasound2
+Maintainer: NoChat Team
+Description: A cross-platform chat application
+EOF
+
+      - name: Create desktop entry
+        run: |
+          cat > ./dist/usr/share/applications/nochat.desktop << 'EOF'
+[Desktop Entry]
+Name=NoChat
+Comment=A cross-platform chat application
+Exec=/usr/bin/nochat/NoChat.App
+Icon=nochat
+Terminal=false
+Type=Application
+Categories=Network;InstantMessaging;
+StartupWMClass=NoChat
+EOF
+
+      - name: Create postinst script
+        run: |
+          cat > ./dist/DEBIAN/postinst << 'EOF'
+#!/bin/bash
+# 更新桌面数据库
+update-desktop-database /usr/share/applications 2>/dev/null || true
+# 刷新图标缓存
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+EOF
+          chmod +x ./dist/DEBIAN/postinst
+
+      - name: Create prerm script
+        run: |
+          cat > ./dist/DEBIAN/prerm << 'EOF'
+#!/bin/bash
+# 清理桌面数据库
+update-desktop-database /usr/share/applications 2>/dev/null || true
+EOF
+          chmod +x ./dist/DEBIAN/prerm
+
+      - name: Build DEB package
+        run: |
+          VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
+          dpkg-deb --build ./dist ./NoChat_${VERSION}_amd64.deb
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoChat-deb
+          path: ./NoChat_*.deb
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoChat-linux-x64
+          path: ./publish/linux/
