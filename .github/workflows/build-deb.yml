@@ -34,47 +34,45 @@ jobs:
 
       - name: Prepare DEB structure
         run: |
-          # 1. 创建符合 Linux 层级结构的目录
+          # 创建标准的 Linux 目录结构
           mkdir -p ./dist/DEBIAN
-          # 建议将二进制文件放在 /usr/lib/nochat，然后在 /usr/bin 创建软链接
           mkdir -p ./dist/usr/lib/nochat
           mkdir -p ./dist/usr/bin
           mkdir -p ./dist/usr/share/applications
           mkdir -p ./dist/usr/share/icons/hicolor/256x256/apps
 
-          # 2. 复制发布文件并确保可执行权限
+          # 复制编译后的文件
           cp -r ./publish/linux/* ./dist/usr/lib/nochat/
           chmod +x ./dist/usr/lib/nochat/NoChat.App
           
-          # 创建软链接到 /usr/bin，方便用户命令行输入 nochat 启动
-          ln -s /usr/lib/nochat/NoChat.App ./dist/usr/bin/nochat
+          # 创建全局启动软链接
+          ln -sf /usr/lib/nochat/NoChat.App ./dist/usr/bin/nochat
 
-          # 3. 复制图标
+          # 复制图标（如果存在）
           if [ -f "./NoChat.App/logo.svg" ]; then
             cp ./NoChat.App/logo.svg ./dist/usr/share/icons/hicolor/256x256/apps/nochat.svg
           fi
 
       - name: Create DEBIAN/control
         run: |
-          # 处理版本号：如果是手动触发则默认为 0.1.0
+          # 提取版本号，处理非 Tag 触发的情况
           REF_NAME="${{ github.ref_name }}"
           VERSION=$(echo ${REF_NAME#v} | grep -E '^[0-9]' || echo "0.1.0")
 
-          cat > ./dist/DEBIAN/control <<EOF
-Package: nochat
-Version: $VERSION
-Section: utils
-Priority: optional
-Architecture: amd64
-Depends: libgtk-3-0, libgbm1, libnss3, libasound2, libc6
-Maintainer: NoChat Team <support@example.com>
-Description: A cross-platform chat application
- Built via GitHub Actions.
-EOF
+          # 使用 printf 避免 EOF 缩进引起的 YAML 解析错误
+          printf "Package: nochat\n\
+          Version: %s\n\
+          Section: utils\n\
+          Priority: optional\n\
+          Architecture: amd64\n\
+          Depends: libgtk-3-0, libgbm1, libnss3, libasound2, libc6\n\
+          Maintainer: NoChat Team\n\
+          Description: A cross-platform chat application\n" "$VERSION" > ./dist/DEBIAN/control
 
       - name: Create desktop entry
         run: |
-          cat > ./dist/usr/share/applications/nochat.desktop << 'EOF'
+          # 使用单引号 'EOF' 确保内容被视为纯文本，不会干扰 YAML 解析
+          cat > ./dist/usr/share/applications/nochat.desktop <<'EOF'
 [Desktop Entry]
 Name=NoChat
 Comment=A cross-platform chat application
@@ -86,34 +84,33 @@ Categories=Network;InstantMessaging;
 StartupWMClass=NoChat
 EOF
 
-      - name: Create postinst & prerm scripts
+      - name: Create maintenance scripts
         run: |
-          # postinst: 安装后运行
-          cat > ./dist/DEBIAN/postinst << 'EOF'
+          # 安装后脚本
+          cat > ./dist/DEBIAN/postinst <<'EOF'
 #!/bin/sh
 set -e
 chmod +x /usr/lib/nochat/NoChat.App
 update-desktop-database /usr/share/applications || true
 gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
 EOF
-          # prerm: 卸载前运行
-          cat > ./dist/DEBIAN/prerm << 'EOF'
+          # 卸载前脚本
+          cat > ./dist/DEBIAN/prerm <<'EOF'
 #!/bin/sh
 set -e
 EOF
-          # 必须修正权限，DEBIAN 目录下的脚本必须是 755
+          # 必须修正脚本权限，否则 dpkg 拒绝打包
           chmod 755 ./dist/DEBIAN/postinst ./dist/DEBIAN/prerm
 
       - name: Build DEB package
         run: |
-          # 关键修复：修正所有者为 root，否则 dpkg 会报错或警告
+          # 修正文件权限归属为 root (DEB 包的强制要求)
           sudo chown -R root:root ./dist
           
           REF_NAME="${{ github.ref_name }}"
           VERSION=$(echo ${REF_NAME#v} | grep -E '^[0-9]' || echo "0.1.0")
           
-          # 打包
-          dpkg-deb --build ./dist ./nochat_${VERSION}_amd64.deb
+          dpkg-deb --build ./dist "nochat_${VERSION}_amd64.deb"
 
       - name: Upload DEB artifact
         uses: actions/upload-artifact@v4
@@ -121,7 +118,7 @@ EOF
           name: NoChat-deb
           path: ./*.deb
 
-      - name: Upload source archive
+      - name: Upload Linux binaries
         uses: actions/upload-artifact@v4
         with:
           name: NoChat-linux-x64
