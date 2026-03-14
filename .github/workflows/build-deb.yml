@@ -34,82 +34,61 @@ jobs:
 
       - name: Prepare DEB structure
         run: |
-          # 创建标准的 Linux 目录结构
           mkdir -p ./dist/DEBIAN
           mkdir -p ./dist/usr/lib/nochat
           mkdir -p ./dist/usr/bin
           mkdir -p ./dist/usr/share/applications
           mkdir -p ./dist/usr/share/icons/hicolor/256x256/apps
 
-          # 复制编译后的文件
           cp -r ./publish/linux/* ./dist/usr/lib/nochat/
           chmod +x ./dist/usr/lib/nochat/NoChat.App
-          
-          # 创建全局启动软链接
           ln -sf /usr/lib/nochat/NoChat.App ./dist/usr/bin/nochat
 
-          # 复制图标（如果存在）
           if [ -f "./NoChat.App/logo.svg" ]; then
             cp ./NoChat.App/logo.svg ./dist/usr/share/icons/hicolor/256x256/apps/nochat.svg
           fi
 
       - name: Create DEBIAN/control
         run: |
-          # 提取版本号，处理非 Tag 触发的情况
           REF_NAME="${{ github.ref_name }}"
           VERSION=$(echo ${REF_NAME#v} | grep -E '^[0-9]' || echo "0.1.0")
-
-          # 使用 printf 避免 EOF 缩进引起的 YAML 解析错误
-          printf "Package: nochat\n\
-          Version: %s\n\
-          Section: utils\n\
-          Priority: optional\n\
-          Architecture: amd64\n\
-          Depends: libgtk-3-0, libgbm1, libnss3, libasound2, libc6\n\
-          Maintainer: NoChat Team\n\
-          Description: A cross-platform chat application\n" "$VERSION" > ./dist/DEBIAN/control
+          
+          # 使用 printf，避免任何潜在的 YAML 解析歧义
+          printf "Package: nochat\nVersion: %s\nSection: utils\nPriority: optional\nArchitecture: amd64\nDepends: libgtk-3-0, libgbm1, libnss3, libasound2, libc6\nMaintainer: NoChat Team\nDescription: A cross-platform chat application\n" "$VERSION" > ./dist/DEBIAN/control
 
       - name: Create desktop entry
         run: |
-          # 使用单引号 'EOF' 确保内容被视为纯文本，不会干扰 YAML 解析
-          cat > ./dist/usr/share/applications/nochat.desktop <<'EOF'
-[Desktop Entry]
-Name=NoChat
-Comment=A cross-platform chat application
-Exec=/usr/bin/nochat
-Icon=nochat
-Terminal=false
-Type=Application
-Categories=Network;InstantMessaging;
-StartupWMClass=NoChat
-EOF
+          # 这种写法将内容逐行写入，彻底避免了 [Desktop Entry] 被误判为 YAML 数组
+          echo "[Desktop Entry]" > ./dist/usr/share/applications/nochat.desktop
+          echo "Name=NoChat" >> ./dist/usr/share/applications/nochat.desktop
+          echo "Comment=A cross-platform chat application" >> ./dist/usr/share/applications/nochat.desktop
+          echo "Exec=/usr/bin/nochat" >> ./dist/usr/share/applications/nochat.desktop
+          echo "Icon=nochat" >> ./dist/usr/share/applications/nochat.desktop
+          echo "Terminal=false" >> ./dist/usr/share/applications/nochat.desktop
+          echo "Type=Application" >> ./dist/usr/share/applications/nochat.desktop
+          echo "Categories=Network;InstantMessaging;" >> ./dist/usr/share/applications/nochat.desktop
+          echo "StartupWMClass=NoChat" >> ./dist/usr/share/applications/nochat.desktop
 
       - name: Create maintenance scripts
         run: |
-          # 安装后脚本
-          cat > ./dist/DEBIAN/postinst <<'EOF'
-#!/bin/sh
-set -e
-chmod +x /usr/lib/nochat/NoChat.App
-update-desktop-database /usr/share/applications || true
-gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
-EOF
-          # 卸载前脚本
-          cat > ./dist/DEBIAN/prerm <<'EOF'
-#!/bin/sh
-set -e
-EOF
-          # 必须修正脚本权限，否则 dpkg 拒绝打包
+          # postinst
+          echo "#!/bin/sh" > ./dist/DEBIAN/postinst
+          echo "set -e" >> ./dist/DEBIAN/postinst
+          echo "chmod +x /usr/lib/nochat/NoChat.App" >> ./dist/DEBIAN/postinst
+          echo "update-desktop-database /usr/share/applications || true" >> ./dist/DEBIAN/postinst
+          echo "gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true" >> ./dist/DEBIAN/postinst
+          
+          # prerm
+          echo "#!/bin/sh" > ./dist/DEBIAN/prerm
+          echo "set -e" >> ./dist/DEBIAN/prerm
+          
           chmod 755 ./dist/DEBIAN/postinst ./dist/DEBIAN/prerm
 
       - name: Build DEB package
         run: |
-          # 修正文件权限归属为 root (DEB 包的强制要求)
           sudo chown -R root:root ./dist
-          
           REF_NAME="${{ github.ref_name }}"
           VERSION=$(echo ${REF_NAME#v} | grep -E '^[0-9]' || echo "0.1.0")
-          
           dpkg-deb --build ./dist "nochat_${VERSION}_amd64.deb"
 
       - name: Upload DEB artifact
