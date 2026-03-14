@@ -98,30 +98,25 @@ public static class LinuxFirewallHelper
         // 尝试永久开放端口（需要 sudo 权限）
         var ports = $"{DiscoveryPort},{MulticastPort},{ChatPort},{FileTransferPort}";
 
-        // ufw allow 命令
-        var allowResult = RunCommand("pkexec", $"ufw allow {ports}/udp; ufw allow {ChatPort}/tcp; ufw allow {FileTransferPort}/tcp");
+        // ufw allow 命令 - 尝试 pkexec
+        var allowResult = RunCommand("pkexec", $"ufw allow {DiscoveryPort}/{MulticastPort}/{ChatPort}/{FileTransferPort}");
 
         if (allowResult.ExitCode == 0)
         {
-            AppLogger.Info($"[防火墙] ufw 已开放端口: {ports}");
-            resultMessage = "已通过 ufw 开放端口 " + ports + "。请确保在同一局域网内可以发现对方。";
+            AppLogger.Info($"[防火墙] ufw 已开放端口");
+            resultMessage = "已通过 ufw 开放端口。请确保在同一局域网内可以发现对方。";
             return true;
         }
-        else
-        {
-            // 如果 pkexec 失败，尝试直接用 sudo（需要用户输入密码）
-            var sudoResult = RunCommand("sudo", $"ufw allow {ports}/udp && sudo ufw allow {ChatPort}/tcp && sudo ufw allow {FileTransferPort}/tcp");
-            if (sudoResult.ExitCode == 0)
-            {
-                AppLogger.Info($"[防火墙] ufw (sudo) 已开放端口: {ports}");
-                resultMessage = "已通过 ufw 开放端口 " + ports + "。请确保在同一局域网内可以发现对方。";
-                return true;
-            }
 
-            AppLogger.Error($"[防火墙] ufw 命令失败: {allowResult.Output}");
-            resultMessage = "无法添加防火墙规则，可能需要手动运行: sudo ufw allow " + ports + "/udp && sudo ufw allow " + ChatPort + "/tcp && sudo ufw allow " + FileTransferPort + "/tcp";
-            return false;
-        }
+        // pkexec 失败，提供手动命令
+        AppLogger.Error($"[防火墙] ufw 命令失败: {allowResult.Output}");
+        resultMessage = "无法自动添加防火墙规则。\n\n请打开终端运行以下命令：\n" +
+            $"  sudo ufw allow {DiscoveryPort}/udp\n" +
+            $"  sudo ufw allow {MulticastPort}/udp\n" +
+            $"  sudo ufw allow {ChatPort}/tcp\n" +
+            $"  sudo ufw allow {FileTransferPort}/tcp\n\n" +
+            "运行后重启 NoChat 即可发现其他设备。";
+        return false;
     }
 
     private static bool AddFirewalldRules(out string resultMessage)
@@ -144,7 +139,13 @@ public static class LinuxFirewallHelper
             return true;
         }
 
-        resultMessage = "无法添加防火墙规则，可能需要手动运行: sudo firewall-cmd --permanent --add-port=" + ports + " && sudo firewall-cmd --reload";
+        resultMessage = "无法自动添加防火墙规则。\n\n请打开终端运行以下命令：\n" +
+            $"  sudo firewall-cmd --permanent --add-port={DiscoveryPort}/udp\n" +
+            $"  sudo firewall-cmd --permanent --add-port={MulticastPort}/udp\n" +
+            $"  sudo firewall-cmd --permanent --add-port={ChatPort}/tcp\n" +
+            $"  sudo firewall-cmd --permanent --add-port={FileTransferPort}/tcp\n" +
+            "  sudo firewall-cmd --reload\n\n" +
+            "运行后重启 NoChat 即可发现其他设备。";
         return false;
     }
 
@@ -176,11 +177,12 @@ public static class LinuxFirewallHelper
             return true;
         }
 
-        resultMessage = "无法添加 iptables 规则，可能需要手动运行:\n" +
-            $"sudo iptables -I INPUT -p udp --dport {DiscoveryPort} -j ACCEPT\n" +
-            $"sudo iptables -I INPUT -p udp --dport {MulticastPort} -j ACCEPT\n" +
-            $"sudo iptables -I INPUT -p tcp --dport {ChatPort} -j ACCEPT\n" +
-            $"sudo iptables -I INPUT -p tcp --dport {FileTransferPort} -j ACCEPT";
+        resultMessage = "无法自动添加 iptables 规则。\n\n请打开终端运行以下命令：\n" +
+            $"  sudo iptables -I INPUT -p udp --dport {DiscoveryPort} -j ACCEPT\n" +
+            $"  sudo iptables -I INPUT -p udp --dport {MulticastPort} -j ACCEPT\n" +
+            $"  sudo iptables -I INPUT -p tcp --dport {ChatPort} -j ACCEPT\n" +
+            $"  sudo iptables -I INPUT -p tcp --dport {FileTransferPort} -j ACCEPT\n\n" +
+            "运行后重启 NoChat 即可发现其他设备。";
         return false;
     }
 
