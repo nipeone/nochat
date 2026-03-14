@@ -27,6 +27,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private bool _hasUpdate;
     private string? _latestVersion;
     private string? _downloadUrl;
+    private bool _isDownloading;
+    private double _downloadProgress;
 
     public SettingsViewModel()
     {
@@ -112,6 +114,18 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         private set { _downloadUrl = value; Raise(); }
     }
 
+    public bool IsDownloading
+    {
+        get => _isDownloading;
+        private set { _isDownloading = value; Raise(); }
+    }
+
+    public double DownloadProgress
+    {
+        get => _downloadProgress;
+        private set { _downloadProgress = value; Raise(); }
+    }
+
     public static string[] AccentColorNames => new[] { "Blue", "Green", "Purple", "Orange", "Red", "Pink" };
 
     public async Task CheckForUpdateAsync()
@@ -150,6 +164,57 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         finally
         {
             IsCheckingUpdate = false;
+        }
+    }
+
+    public async Task DownloadAndInstallAsync()
+    {
+        if (string.IsNullOrEmpty(DownloadUrl) || IsDownloading) return;
+
+        IsDownloading = true;
+        DownloadProgress = 0;
+        UpdateStatus = "正在下载更新...";
+
+        try
+        {
+            var progress = new Progress<double>(p =>
+            {
+                DownloadProgress = p * 100;
+            });
+
+            var installerPath = await UpdateService.DownloadUpdateAsync(DownloadUrl, progress);
+
+            if (string.IsNullOrEmpty(installerPath))
+            {
+                UpdateStatus = "下载失败";
+                return;
+            }
+
+            UpdateStatus = "正在启动安装程序...";
+
+            var success = UpdateService.InstallUpdate(installerPath);
+            if (success)
+            {
+                UpdateStatus = "正在安装，请等待...";
+                // 退出当前应用，让安装程序完成更新
+                await Task.Delay(2000);
+                if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                {
+                    desktop.Shutdown();
+                }
+            }
+            else
+            {
+                UpdateStatus = "启动安装程序失败";
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = $"更新失败: {ex.Message}";
+        }
+        finally
+        {
+            IsDownloading = false;
         }
     }
 

@@ -64,7 +64,9 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
                     <Button x:Name="BtnCheckUpdate" Content="检查更新" Click="OnCheckUpdateClick"/>
+                    <Button x:Name="BtnDownloadUpdate" Content="下载并安装" Click="OnDownloadUpdateClick" IsVisible="False"/>
                 </StackPanel>
+                <ProgressBar x:Name="DownloadProgressBar" IsVisible="False" Minimum="0" Maximum="100" Height="4" Margin="0,8,0,0"/>
                 <TextBlock x:Name="UpdateStatusText" FontSize="12" Opacity="0.8" TextWrapping="Wrap" MaxWidth="400"/>
             </StackPanel>
         </StackPanel>

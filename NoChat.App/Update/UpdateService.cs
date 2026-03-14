@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
@@ -175,6 +176,86 @@ public static class UpdateService
         {
             AppLogger.Error("[更新] 下载更新异常", ex);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// 安装下载的更新包
+    /// </summary>
+    /// <param name="installerPath">安装包路径</param>
+    /// <returns>是否成功启动安装程序</returns>
+    public static bool InstallUpdate(string installerPath)
+    {
+        try
+        {
+            if (!File.Exists(installerPath))
+            {
+                AppLogger.Error($"[更新] 安装包不存在: {installerPath}");
+                return false;
+            }
+
+            AppLogger.Info($"[更新] 开始安装: {installerPath}");
+
+            var extension = Path.GetExtension(installerPath).ToLowerInvariant();
+            var startInfo = new ProcessStartInfo();
+
+            if (OperatingSystem.IsWindows())
+            {
+                // Windows: 直接运行 exe 或 msix
+                startInfo.FileName = installerPath;
+                startInfo.UseShellExecute = true;
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                // Linux: 根据包类型选择安装方式
+                if (extension == ".deb")
+                {
+                    // 使用 gdebi 或 dpkg 安装
+                    startInfo.FileName = "pkexec";
+                    startInfo.Arguments = $"dpkg -i \"{installerPath}\"";
+                    startInfo.UseShellExecute = false;
+                }
+                else if (extension == ".rpm")
+                {
+                    // 使用 rpm 安装
+                    startInfo.FileName = "pkexec";
+                    startInfo.Arguments = $"rpm -i \"{installerPath}\"";
+                    startInfo.UseShellExecute = false;
+                }
+                else if (extension == ".zip")
+                {
+                    // ZIP 解压到 /opt，用户手动替换
+                    startInfo.FileName = "xdg-open";
+                    startInfo.Arguments = Path.GetDirectoryName(installerPath) ?? "";
+                    startInfo.UseShellExecute = true;
+                }
+                else
+                {
+                    AppLogger.Error($"[更新] 不支持的安装包格式: {extension}");
+                    return false;
+                }
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                // macOS: 打开 dmg 或 zip
+                startInfo.FileName = "open";
+                startInfo.Arguments = installerPath;
+                startInfo.UseShellExecute = true;
+            }
+            else
+            {
+                AppLogger.Error("[更新] 不支持的操作系统");
+                return false;
+            }
+
+            Process.Start(startInfo);
+            AppLogger.Info("[更新] 已启动安装程序");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("[更新] 安装更新异常", ex);
+            return false;
         }
     }
 

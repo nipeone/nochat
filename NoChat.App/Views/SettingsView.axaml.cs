@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -28,6 +29,7 @@ public partial class SettingsView : UserControl
             InitializeComponent();
             _viewModel = new SettingsViewModel();
             DataContext = _viewModel;
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             Loaded += (s, e) =>
             {
                 LoadFromSettings();
@@ -179,6 +181,10 @@ public partial class SettingsView : UserControl
 
         if (BtnCheckUpdate != null)
             BtnCheckUpdate.IsEnabled = false;
+        if (BtnDownloadUpdate != null)
+            BtnDownloadUpdate.IsVisible = false;
+        if (DownloadProgressBar != null)
+            DownloadProgressBar.IsVisible = false;
 
         try
         {
@@ -190,14 +196,55 @@ public partial class SettingsView : UserControl
             // 如果有更新，显示下载选项
             if (_viewModel.HasUpdate && !string.IsNullOrEmpty(_viewModel.DownloadUrl))
             {
-                UpdateStatusText.Text = $"{_viewModel.UpdateStatus}，点击打开下载页面";
-                UpdateStatusText.Text += $" ({_viewModel.LatestVersion})";
+                if (BtnDownloadUpdate != null)
+                    BtnDownloadUpdate.IsVisible = true;
             }
         }
         finally
         {
             if (BtnCheckUpdate != null)
                 BtnCheckUpdate.IsEnabled = true;
+        }
+    }
+
+    private async void OnDownloadUpdateClick(object? sender, RoutedEventArgs e)
+    {
+        if (_viewModel == null) return;
+
+        if (BtnDownloadUpdate != null)
+            BtnDownloadUpdate.IsVisible = false;
+        if (BtnCheckUpdate != null)
+            BtnCheckUpdate.IsEnabled = false;
+        if (DownloadProgressBar != null)
+            DownloadProgressBar.IsVisible = true;
+
+        try
+        {
+            await _viewModel.DownloadAndInstallAsync();
+
+            if (UpdateStatusText != null)
+                UpdateStatusText.Text = _viewModel.UpdateStatus;
+        }
+        finally
+        {
+            if (BtnCheckUpdate != null)
+                BtnCheckUpdate.IsEnabled = true;
+            if (DownloadProgressBar != null)
+                DownloadProgressBar.IsVisible = false;
+        }
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SettingsViewModel.DownloadProgress) && _viewModel != null)
+        {
+            if (DownloadProgressBar != null)
+                DownloadProgressBar.Value = _viewModel.DownloadProgress;
+        }
+        else if (e.PropertyName == nameof(SettingsViewModel.UpdateStatus) && _viewModel != null)
+        {
+            if (UpdateStatusText != null)
+                UpdateStatusText.Text = _viewModel.UpdateStatus;
         }
     }
 }
