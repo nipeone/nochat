@@ -10,6 +10,8 @@ namespace NoChat.App.Settings;
 [JsonSerializable(typeof(ThemeMode))]
 [JsonSerializable(typeof(CloseBehavior))]
 [JsonSerializable(typeof(CloseChoice))]
+[JsonSerializable(typeof(NoChat.App.Update.UpdateInfo))]
+[JsonSerializable(typeof(NoChat.App.Update.UpdateAsset))]
 public partial class AppSettingsJsonContext : JsonSerializerContext
 {
 }

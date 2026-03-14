@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using NoChat.App.Logging;
+using NoChat.App.Settings;
 
 namespace NoChat.App.Update;
 
@@ -87,7 +88,7 @@ public static class UpdateService
             }
 
             var json = await response.Content.ReadAsStringAsync();
-            var updateInfo = JsonSerializer.Deserialize<UpdateInfo>(json);
+            var updateInfo = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.UpdateInfo);
 
             if (updateInfo == null)
             {
