@@ -1,4 +1,4 @@
-name: Build DEB Package
+name: Build Multi-Platform Packages
 
 on:
   workflow_dispatch:
@@ -7,6 +7,7 @@ on:
       - 'v*'
 
 jobs:
+  # Linux DEB
   build-deb:
     runs-on: ubuntu-latest
 
@@ -52,13 +53,11 @@ jobs:
         run: |
           REF_NAME="${{ github.ref_name }}"
           VERSION=$(echo ${REF_NAME#v} | grep -E '^[0-9]' || echo "0.1.0")
-          
-          # 使用 printf，避免任何潜在的 YAML 解析歧义
+
           printf "Package: nochat\nVersion: %s\nSection: utils\nPriority: optional\nArchitecture: amd64\nDepends: libgtk-3-0, libgbm1, libnss3, libasound2, libc6\nMaintainer: NoChat Team\nDescription: A cross-platform chat application\n" "$VERSION" > ./dist/DEBIAN/control
 
       - name: Create desktop entry
         run: |
-          # 这种写法将内容逐行写入，彻底避免了 [Desktop Entry] 被误判为 YAML 数组
           echo "[Desktop Entry]" > ./dist/usr/share/applications/nochat.desktop
           echo "Name=NoChat" >> ./dist/usr/share/applications/nochat.desktop
           echo "Comment=A cross-platform chat application" >> ./dist/usr/share/applications/nochat.desktop
@@ -71,17 +70,15 @@ jobs:
 
       - name: Create maintenance scripts
         run: |
-          # postinst
           echo "#!/bin/sh" > ./dist/DEBIAN/postinst
           echo "set -e" >> ./dist/DEBIAN/postinst
           echo "chmod +x /usr/lib/nochat/NoChat.App" >> ./dist/DEBIAN/postinst
           echo "update-desktop-database /usr/share/applications || true" >> ./dist/DEBIAN/postinst
           echo "gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true" >> ./dist/DEBIAN/postinst
-          
-          # prerm
+
           echo "#!/bin/sh" > ./dist/DEBIAN/prerm
           echo "set -e" >> ./dist/DEBIAN/prerm
-          
+
           chmod 755 ./dist/DEBIAN/postinst ./dist/DEBIAN/prerm
 
       - name: Build DEB package
@@ -102,3 +99,79 @@ jobs:
         with:
           name: NoChat-linux-x64
           path: ./publish/linux/
+
+  # Windows
+  build-windows:
+    strategy:
+      matrix:
+        include:
+          - platform: win-x64
+            artifact: NoChat-win-x64
+          - platform: win-arm64
+            artifact: NoChat-win-arm64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+
+      - name: Publish Windows
+        run: |
+          dotnet publish NoChat.App/NoChat.App.csproj `
+            -c Release `
+            -r ${{ matrix.platform }} `
+            --self-contained true `
+            -p:PublishTrimmed=true `
+            -p:TrimMode=partial `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -o ./publish/${{ matrix.platform }}
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./publish/${{ matrix.platform }}/
+
+  # macOS
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - platform: osx-x64
+            artifact: NoChat-macos-x64
+          - platform: osx-arm64
+            artifact: NoChat-macos-arm64
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+
+      - name: Publish macOS
+        run: |
+          dotnet publish NoChat.App/NoChat.App.csproj \
+            -c Release \
+            -r ${{ matrix.platform }} \
+            --self-contained true \
+            -p:PublishTrimmed=true \
+            -p:TrimMode=partial \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -o ./publish/${{ matrix.platform }}
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./publish/${{ matrix.platform }}/
