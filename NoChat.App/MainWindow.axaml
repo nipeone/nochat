@@ -36,21 +36,28 @@
     <Grid ColumnDefinitions="64,280,*" RowDefinitions="*">
         <!-- 左侧导航 -->
         <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource BorderBrush}">
-            <StackPanel Margin="0,16,0,0">
-                <StackPanel HorizontalAlignment="Center" Spacing="4.0" Margin="0,0,0,24">
+            <Grid Margin="0,16,0,0" RowDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Row="0" HorizontalAlignment="Center" Spacing="4.0" Margin="0,0,0,24">
                     <Border Width="40" Height="40" CornerRadius="20.0" Background="{DynamicResource AccentBrush}" HorizontalAlignment="Center">
                         <TextBlock x:Name="UserInitial" Text="N" FontSize="18" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <Ellipse Width="10" Height="10" Fill="#50C878" HorizontalAlignment="Center"/>
                 </StackPanel>
-                <Button x:Name="NavChats" Content="💬 聊天" Margin="8,4" FontSize="16" HorizontalContentAlignment="Center" BorderThickness="0" Click="OnNavChats"/>
-                <Button x:Name="NavGroups" Content="👥 群组" Margin="8,4" FontSize="16" HorizontalContentAlignment="Center" Background="Transparent" BorderThickness="0" Click="OnNavGroups"/>
-                <Button x:Name="NavSettings" Content="⚙ 设置" Margin="8,4" FontSize="16" HorizontalContentAlignment="Center" Background="Transparent" BorderThickness="0" Click="OnNavSettings"/>
-                <StackPanel VerticalAlignment="Bottom" Margin="8,0,8,16">
-                    <TextBlock Text="深色模式" FontSize="12" Opacity="0.8" Margin="8,0"/>
-                    <ToggleSwitch x:Name="DarkModeToggle" IsCheckedChanged="OnDarkModeToggled"/>
+                <StackPanel Grid.Row="1" VerticalAlignment="Top">
+                    <Button x:Name="NavChats" Content="💬 聊天" Margin="8,4" FontSize="16" HorizontalContentAlignment="Center" BorderThickness="0" Click="OnNavChats"/>
+                    <Button x:Name="NavGroups" Content="👥 群组" Margin="8,4" FontSize="16" HorizontalContentAlignment="Center" Background="Transparent" BorderThickness="0" Click="OnNavGroups"/>
+                    <Button x:Name="NavSettings" Content="⚙ 设置" Margin="8,4" FontSize="16" HorizontalContentAlignment="Center" Background="Transparent" BorderThickness="0" Click="OnNavSettings"/>
                 </StackPanel>
-            </StackPanel>
+                <StackPanel Grid.Row="2" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,8" Spacing="2">
+                    <TextBlock Text="深色模式" FontSize="12" Opacity="0.8" HorizontalAlignment="Center"/>
+                    <ToggleSwitch x:Name="DarkModeToggle" 
+                                  IsCheckedChanged="OnDarkModeToggled" 
+                                  HorizontalAlignment="Center" 
+                                  OnContent="" 
+                                  OffContent="" 
+                                  Margin="10,0,0,0"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- 中间：LAN Users -->
