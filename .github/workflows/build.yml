@@ -42,11 +42,13 @@ jobs:
           mkdir -p ./dist/usr/share/icons/hicolor/256x256/apps
 
           cp -r ./publish/linux/* ./dist/usr/lib/nochat/
-          chmod +x ./dist/usr/lib/nochat/NoChat.App
-          ln -sf /usr/lib/nochat/NoChat.App ./dist/usr/bin/nochat
+          chmod +x ./dist/usr/lib/nochat/NoChat
+          ln -sf /usr/lib/nochat/NoChat ./dist/usr/bin/nochat
 
           if [ -f "./NoChat.App/logo.svg" ]; then
             cp ./NoChat.App/logo.svg ./dist/usr/share/icons/hicolor/256x256/apps/nochat.svg
+          elif [ -f "./logo.svg" ]; then
+            cp ./logo.svg ./dist/usr/share/icons/hicolor/256x256/apps/nochat.svg
           fi
 
       - name: Create DEBIAN/control
@@ -72,7 +74,7 @@ jobs:
         run: |
           echo "#!/bin/sh" > ./dist/DEBIAN/postinst
           echo "set -e" >> ./dist/DEBIAN/postinst
-          echo "chmod +x /usr/lib/nochat/NoChat.App" >> ./dist/DEBIAN/postinst
+          echo "chmod +x /usr/lib/nochat/NoChat" >> ./dist/DEBIAN/postinst
           echo "update-desktop-database /usr/share/applications || true" >> ./dist/DEBIAN/postinst
           echo "gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true" >> ./dist/DEBIAN/postinst
 
@@ -204,10 +206,10 @@ jobs:
           prerelease: false
           files: |
             ./artifacts/NoChat-deb/*.deb
-            ./artifacts/NoChat-linux-x64/NoChat.App
-            ./artifacts/NoChat-win-x64/NoChat.App.exe
-            ./artifacts/NoChat-win-arm64/NoChat.App.exe
-            ./artifacts/NoChat-macos-x64/NoChat.App
-            ./artifacts/NoChat-macos-arm64/NoChat.App
+            ./artifacts/NoChat-linux-x64/NoChat
+            ./artifacts/NoChat-win-x64/NoChat.exe
+            ./artifacts/NoChat-win-arm64/NoChat.exe
+            ./artifacts/NoChat-macos-x64/NoChat
+            ./artifacts/NoChat-macos-arm64/NoChat
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
