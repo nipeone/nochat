@@ -100,64 +100,31 @@ jobs:
           name: NoChat-linux-x64
           path: ./publish/linux/
 
-  # Linux RPM
+  # Linux RPM (convert from DEB)
   build-rpm:
     runs-on: ubuntu-latest
+    needs: build-deb
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0'
-
-      - name: Install RPM tools
+      - name: Install alien
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm
+          sudo apt-get install -y alien
 
-      - name: Publish Linux
+      - name: Download DEB artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NoChat-deb
+          path: ./
+
+      - name: Convert DEB to RPM
         run: |
-          dotnet publish NoChat.App/NoChat.App.csproj \
-            -c Release \
-            -r linux-x64 \
-            --self-contained true \
-            -p:PublishTrimmed=true \
-            -p:TrimMode=partial \
-            -p:PublishSingleFile=true \
-            -p:IncludeNativeLibrariesForSelfExtract=true \
-            -p:InvariantGlobalization=true \
-            -o ./publish/linux
-
-      - name: Prepare RPM structure
-        run: |
-          mkdir -p ./rpmbuild/BUILDROOT
-          mkdir -p ./rpmbuild/RPMS
-          mkdir -p ./rpmbuild/SPECS
-
-          # 复制发布文件到 BUILDROOT
-          cp -r ./publish/linux/* ./rpmbuild/BUILDROOT/
-
-      - name: Create SPEC file
-        run: |
-          printf 'Name:           nochat\nVersion:        1.0.0\nRelease:        1\nSummary:        A cross-platform chat application\nLicense:        MIT\nURL:            https://github.com/nipeone/nochat\nBuildArch:      x86_64\nRequires:       gtk3, libgbm, nss, alsa-lib, glibc\n\n' > ./rpmbuild/SPECS/nochat.spec
-
-          printf '%%description\nNoChat - A cross-platform chat application\n\n' >> ./rpmbuild/SPECS/nochat.spec
-          # 使用 _buildrootdir 指向我们自己的构建目录
-          printf '%%install\nmkdir -p %%{buildroot}/usr/lib/nochat\nmkdir -p %%{buildroot}/usr/bin\ncp -r /home/runner/work/nochat/nochat/publish/linux/* %%{buildroot}/usr/lib/nochat/\nchmod +x %%{buildroot}/usr/lib/nochat/NoChat\nln -sf /usr/lib/nochat/NoChat %%{buildroot}/usr/bin/nochat\n\n' >> ./rpmbuild/SPECS/nochat.spec
-          printf '%%files\n/usr/lib/nochat/*\n/usr/bin/nochat\n' >> ./rpmbuild/SPECS/nochat.spec
-
-      - name: Build RPM package
-        run: |
-          rpmbuild -bb --define "_buildrootdir /home/runner/work/nochat/nochat/rpmbuild/BUILDROOT" ./rpmbuild/SPECS/nochat.spec
+          sudo alien -r --verbose NoChat-linux-x64.deb
 
       - name: Find RPM file
         run: |
-          RPM_FILE=$(find ./rpmbuild/RPMS -name "*.rpm" | head -1)
-          echo "RPM_FILE=$RPM_FILE" >> $GITHUB_ENV
-          cp "$RPM_FILE" ./NoChat-linux-x64.rpm
+          RPM_FILE=$(find . -name "*.rpm" | grep -v debug | head -1)
+          cp "$RPM_FILE" NoChat-linux-x64.rpm
 
       - name: Upload RPM artifact
         uses: actions/upload-artifact@v4
